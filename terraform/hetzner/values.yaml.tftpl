@@ -24,10 +24,23 @@ minecraftWrapper:
     SERVER_MOTD: "${server_motd}"
     MAX_PLAYERS: "${max_players}"
     JAVA_OPTS: "${java_opts}"
+    # All four upload limits are derived from world_upload_max_size_mb so they
+    # cannot drift apart; the smallest of them is what a client actually hits.
+    MAX_FILE_UPLOAD_SIZE: "${world_upload_max_size_mb}MB"
+    MAX_REQUEST_UPLOAD_SIZE: "${world_upload_max_size_mb}MB"
+    MULTIPART_TEMP_DIR: "${multipart_temp_dir}"
+    WORLD_UPLOAD_MAX_FILE_SIZE_MB: "${world_upload_max_size_mb}"
+    WORLD_UPLOAD_MAX_EXTRACTED_MB: "${world_upload_max_extracted_mb}"
+    WORLD_UPLOAD_MAX_ENTRIES: "${world_upload_max_entries}"
 
 webapp:
   image:
     repository: ${image_registry}/open-mc-server-webapp
+  env:
+    MAX_FILE_UPLOAD_SIZE: "${world_upload_max_size_mb}MB"
+    MAX_REQUEST_UPLOAD_SIZE: "${world_upload_max_size_mb}MB"
+    MULTIPART_TEMP_DIR: "${multipart_temp_dir}"
+    WORLD_UPLOAD_READ_TIMEOUT_SECONDS: "${world_upload_timeout_seconds}"
 
 nginx:
   image:
@@ -36,6 +49,11 @@ nginx:
     type: NodePort
     httpNodePort: ${http_nodeport}
     httpsNodePort: ${https_nodeport}
+  # Kept in step with the app-side multipart limits above. The chart's own
+  # default is 100M, which silently caps uploads well below the 2048MB the
+  # services advertise; deriving both from one variable removes that trap.
+  maxBodySize: ${world_upload_max_size_mb}M
+  uploadTimeout: ${world_upload_timeout_seconds}s
 
 backupManager:
   image:
@@ -60,6 +78,7 @@ podDisruptionBudgets:
 persistence:
   mcserver:
     storageClass: "${storage_class}"
+    size: ${mcserver_storage_size}
   webappData:
     storageClass: "${storage_class}"
   alertManagerData:

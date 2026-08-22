@@ -57,9 +57,31 @@ data:
                 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
                 proxy_set_header X-Forwarded-Proto $scheme;
 
+                # Stream the body straight through rather than spooling the whole
+                # upload to nginx's temp directory first.
+                proxy_request_buffering off;
+
                 proxy_connect_timeout 60s;
-                proxy_send_timeout    60s;
-                proxy_read_timeout    60s;
+                proxy_send_timeout    {{ .Values.nginx.uploadTimeout }};
+                proxy_read_timeout    {{ .Values.nginx.uploadTimeout }};
+            }
+
+            # World upload/list/delete are served by the web app, but an upload can run
+            # for far longer than the 60s the dashboard's other requests need, and a
+            # multi-GB body must not be spooled to disk inside the nginx container. Both
+            # are why this is a separate location from the catch-all below.
+            location /api/world/ {
+                proxy_pass http://{{ include "omcsi.webappHost" . }}:{{ .Values.webapp.service.port }};
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+
+                proxy_request_buffering off;
+
+                proxy_connect_timeout 60s;
+                proxy_send_timeout    {{ .Values.nginx.uploadTimeout }};
+                proxy_read_timeout    {{ .Values.nginx.uploadTimeout }};
             }
 
             location / {

@@ -132,6 +132,10 @@ spec:
               value: {{ .Values.webapp.env.MAX_FILE_UPLOAD_SIZE | quote }}
             - name: MAX_REQUEST_UPLOAD_SIZE
               value: {{ .Values.webapp.env.MAX_REQUEST_UPLOAD_SIZE | quote }}
+            - name: MULTIPART_TEMP_DIR
+              value: {{ .Values.webapp.env.MULTIPART_TEMP_DIR | quote }}
+            - name: WORLD_UPLOAD_READ_TIMEOUT_SECONDS
+              value: {{ .Values.webapp.env.WORLD_UPLOAD_READ_TIMEOUT_SECONDS | quote }}
             - name: DEPLOYMENT_AUTH_TOKEN
               valueFrom:
                 secretKeyRef:

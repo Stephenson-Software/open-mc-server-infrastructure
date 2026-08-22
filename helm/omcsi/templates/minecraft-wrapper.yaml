@@ -108,6 +108,18 @@ spec:
               value: {{ .Values.minecraftWrapper.env.DEFAULT_PLUGINS | quote }}
             - name: WORLD_DIRECTORY
               value: {{ .Values.minecraftWrapper.env.WORLD_DIRECTORY | quote }}
+            - name: MAX_FILE_UPLOAD_SIZE
+              value: {{ .Values.minecraftWrapper.env.MAX_FILE_UPLOAD_SIZE | quote }}
+            - name: MAX_REQUEST_UPLOAD_SIZE
+              value: {{ .Values.minecraftWrapper.env.MAX_REQUEST_UPLOAD_SIZE | quote }}
+            - name: MULTIPART_TEMP_DIR
+              value: {{ .Values.minecraftWrapper.env.MULTIPART_TEMP_DIR | quote }}
+            - name: WORLD_UPLOAD_MAX_FILE_SIZE_MB
+              value: {{ .Values.minecraftWrapper.env.WORLD_UPLOAD_MAX_FILE_SIZE_MB | quote }}
+            - name: WORLD_UPLOAD_MAX_EXTRACTED_MB
+              value: {{ .Values.minecraftWrapper.env.WORLD_UPLOAD_MAX_EXTRACTED_MB | quote }}
+            - name: WORLD_UPLOAD_MAX_ENTRIES
+              value: {{ .Values.minecraftWrapper.env.WORLD_UPLOAD_MAX_ENTRIES | quote }}
             - name: WEBAPP_URL
               value: "http://{{ include "omcsi.webappHost" . }}:{{ .Values.webapp.service.port }}"
             - name: DEPLOYMENT_AUTH_TOKEN

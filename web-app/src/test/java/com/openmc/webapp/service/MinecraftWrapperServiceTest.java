@@ -53,7 +53,7 @@ class MinecraftWrapperServiceTest {
         when(restTemplateBuilder.setReadTimeout(any())).thenReturn(restTemplateBuilder);
         when(restTemplateBuilder.build()).thenReturn(restTemplate);
 
-        service = new MinecraftWrapperService(restTemplateBuilder);
+        service = new MinecraftWrapperService(restTemplateBuilder, 600L);
         ReflectionTestUtils.setField(service, "wrapperUrl", WRAPPER_URL);
     }
 

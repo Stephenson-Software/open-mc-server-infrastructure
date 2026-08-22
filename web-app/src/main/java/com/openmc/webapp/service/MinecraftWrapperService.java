@@ -49,14 +49,20 @@ public class MinecraftWrapperService {
     private final RestTemplate restTemplate;
     private final RestTemplate uploadRestTemplate;
 
-    public MinecraftWrapperService(RestTemplateBuilder restTemplateBuilder) {
+    public MinecraftWrapperService(
+            RestTemplateBuilder restTemplateBuilder,
+            @Value("${world.upload.read-timeout-seconds:600}") long uploadReadTimeoutSeconds) {
         this.restTemplate = restTemplateBuilder
                 .setConnectTimeout(Duration.ofSeconds(5))
                 .setReadTimeout(Duration.ofSeconds(10))
                 .build();
+        // The wrapper does not respond until it has stopped the server, extracted the
+        // archive, swapped the world in and restarted, so this covers the whole operation
+        // rather than just the transfer. It scales with world size — raise
+        // WORLD_UPLOAD_READ_TIMEOUT_SECONDS alongside the upload size limits.
         this.uploadRestTemplate = restTemplateBuilder
                 .setConnectTimeout(Duration.ofSeconds(5))
-                .setReadTimeout(Duration.ofMinutes(10))
+                .setReadTimeout(Duration.ofSeconds(uploadReadTimeoutSeconds))
                 .build();
     }
 

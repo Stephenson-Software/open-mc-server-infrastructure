@@ -55,3 +55,16 @@ admin_password = "strongpassword"
 # agent_discord_bot_token  = "BOT_TOKEN"
 # agent_discord_channel_id = "CHANNEL_ID"
 # agent_anthropic_api_key  = "API_KEY"
+
+# Optional: world upload limits.
+# Every layer in front of the upload — nginx's client_max_body_size, both
+# services' multipart limits, and the wrapper's own check — is derived from
+# world_upload_max_size_mb, so this one number is the cap. Defaults to 2048.
+#
+# Accepting a 5 GB world archive:
+# world_upload_max_size_mb      = 5120
+# world_upload_max_extracted_mb = 30720    # worlds expand several times over
+# world_upload_max_entries      = 100000   # entry-count cap (zip bomb protection)
+# world_upload_timeout_seconds  = 7200     # transfer + extract + swap + restart
+# multipart_temp_dir            = "/mcserver/tmp"
+# mcserver_storage_size         = "80Gi"   # holds the old and new world at once

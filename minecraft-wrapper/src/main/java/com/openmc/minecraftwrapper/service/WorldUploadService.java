@@ -18,12 +18,31 @@ import java.util.zip.ZipInputStream;
 @Service
 public class WorldUploadService {
 
-    private static final long MAX_FILE_SIZE = 2L * 1024 * 1024 * 1024;
-    private static final int MAX_ZIP_ENTRIES = 100_000;
-    private static final long MAX_UNCOMPRESSED_BYTES = 10L * 1024 * 1024 * 1024;
+    private static final long BYTES_PER_MB = 1024L * 1024L;
 
     @Value("${world.directory:/mcserver/world}")
     private String worldDirectory;
+
+    /**
+     * Largest accepted archive, in MB. Must be raised together with the multipart limits in
+     * front of it — {@code spring.servlet.multipart.max-file-size} here, the web app's own
+     * multipart limit, and nginx's {@code client_max_body_size} — since the smallest of those
+     * is what a client actually hits first.
+     */
+    @Value("${world.upload.max-file-size-mb:2048}")
+    private long maxFileSizeMb = 2048;
+
+    /**
+     * Cap on the total extracted size, in MB — zip bomb protection. A world archive expands
+     * well past its compressed size (region files are dense NBT), so this needs headroom of
+     * several times {@link #maxFileSizeMb}, and the volume needs room for the result.
+     */
+    @Value("${world.upload.max-extracted-mb:10240}")
+    private long maxExtractedMb = 10240;
+
+    /** Cap on the number of entries in the archive — zip bomb protection. */
+    @Value("${world.upload.max-entries:100000}")
+    private int maxZipEntries = 100_000;
 
     private final MinecraftServerService minecraftServerService;
 
@@ -201,8 +220,11 @@ public class WorldUploadService {
         long totalBytes = 0;
 
         while ((entry = zis.getNextEntry()) != null) {
-            if (++entryCount > MAX_ZIP_ENTRIES) {
-                throw new IllegalArgumentException("Archive has too many entries (zip bomb protection)");
+            if (++entryCount > maxZipEntries) {
+                throw new IllegalArgumentException(String.format(
+                        "Archive has more than %d entries (zip bomb protection). Raise "
+                                + "WORLD_UPLOAD_MAX_ENTRIES if the world legitimately has this many files.",
+                        maxZipEntries));
             }
 
             String name = entry.getName();
@@ -224,9 +246,12 @@ public class WorldUploadService {
                 }
                 long written = Files.copy(zis, target, StandardCopyOption.REPLACE_EXISTING);
                 totalBytes += written;
-                if (totalBytes > MAX_UNCOMPRESSED_BYTES) {
-                    throw new IllegalArgumentException(
-                            "Archive uncompressed size exceeds the 10 GB limit (zip bomb protection)");
+                if (totalBytes > maxExtractedMb * BYTES_PER_MB) {
+                    throw new IllegalArgumentException(String.format(
+                            "Archive expands to more than %d MB (zip bomb protection). Raise "
+                                    + "WORLD_UPLOAD_MAX_EXTRACTED_MB, and check the world volume has "
+                                    + "room for both the old and new world at once.",
+                            maxExtractedMb));
                 }
             }
             zis.closeEntry();
@@ -254,8 +279,12 @@ public class WorldUploadService {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("File must not be empty");
         }
-        if (file.getSize() > MAX_FILE_SIZE) {
-            throw new IllegalArgumentException("File size exceeds the 2 GB limit");
+        long maxBytes = maxFileSizeMb * BYTES_PER_MB;
+        if (file.getSize() > maxBytes) {
+            throw new IllegalArgumentException(String.format(
+                    "Archive is %d MB, over the %d MB limit. Raise WORLD_UPLOAD_MAX_FILE_SIZE_MB "
+                            + "(and the multipart and nginx limits in front of it) to accept it.",
+                    file.getSize() / BYTES_PER_MB, maxFileSizeMb));
         }
     }
 }

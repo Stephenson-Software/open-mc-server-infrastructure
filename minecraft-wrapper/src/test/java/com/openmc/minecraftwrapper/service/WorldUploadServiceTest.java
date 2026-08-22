@@ -117,7 +117,7 @@ class WorldUploadServiceTest {
     }
 
     @Test
-    @DisplayName("replaceWorld rejects file exceeding 2 GB")
+    @DisplayName("replaceWorld rejects file exceeding the default 2 GB limit")
     void rejectsOversizedFile() {
         MultipartFile bigFile = mock(MultipartFile.class);
         when(bigFile.isEmpty()).thenReturn(false);
@@ -125,6 +125,53 @@ class WorldUploadServiceTest {
 
         assertThrows(IllegalArgumentException.class,
                 () -> worldUploadService.replaceWorld(bigFile));
+    }
+
+    @Test
+    @DisplayName("replaceWorld accepts a file over 2 GB once the limit is raised")
+    void acceptsOversizedFileWhenLimitRaised() throws IOException {
+        ReflectionTestUtils.setField(worldUploadService, "maxFileSizeMb", 5120L);
+
+        MultipartFile bigFile = mock(MultipartFile.class);
+        when(bigFile.isEmpty()).thenReturn(false);
+        when(bigFile.getSize()).thenReturn(3L * 1024 * 1024 * 1024);
+        when(bigFile.getInputStream()).thenReturn(new java.io.ByteArrayInputStream(buildFlatWorldZip()));
+
+        worldUploadService.replaceWorld(bigFile);
+
+        assertTrue(Files.exists(worldDir.resolve("level.dat")));
+    }
+
+    @Test
+    @DisplayName("oversized-file message names the limit and how to raise it")
+    void oversizedFileMessageGuidesRecovery() {
+        MultipartFile bigFile = mock(MultipartFile.class);
+        when(bigFile.isEmpty()).thenReturn(false);
+        when(bigFile.getSize()).thenReturn(3L * 1024 * 1024 * 1024);
+
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> worldUploadService.replaceWorld(bigFile));
+
+        assertTrue(e.getMessage().contains("2048 MB"), e.getMessage());
+        assertTrue(e.getMessage().contains("WORLD_UPLOAD_MAX_FILE_SIZE_MB"), e.getMessage());
+    }
+
+    @Test
+    @DisplayName("replaceWorld rejects an archive that expands past the extracted-size limit")
+    void rejectsArchiveOverExtractedLimit() throws IOException {
+        ReflectionTestUtils.setField(worldUploadService, "maxExtractedMb", 0L);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> worldUploadService.replaceWorld(zipFile(buildFlatWorldZip())));
+    }
+
+    @Test
+    @DisplayName("replaceWorld rejects an archive with more entries than allowed")
+    void rejectsArchiveOverEntryLimit() throws IOException {
+        ReflectionTestUtils.setField(worldUploadService, "maxZipEntries", 1);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> worldUploadService.replaceWorld(zipFile(buildFlatWorldZip())));
     }
 
     // ── extractZip — security guards ─────────────────────────────────────────

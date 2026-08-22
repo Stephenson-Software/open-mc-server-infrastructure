@@ -282,3 +282,59 @@ tests:
             name: ALERT_MANAGER_URL
             value: http://RELEASE-NAME-omcsi-alert-manager:8090/api/alerts
         documentIndex: 0
+
+  # The upload path has three limits in series — nginx.maxBodySize, the multipart
+  # limits, then the WORLD_UPLOAD_* checks. Each has to be settable, or the
+  # smallest silently caps the others.
+  - it: renders the world upload limits at their defaults
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WORLD_UPLOAD_MAX_FILE_SIZE_MB
+            value: "2048"
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WORLD_UPLOAD_MAX_EXTRACTED_MB
+            value: "10240"
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MAX_FILE_UPLOAD_SIZE
+            value: 2048MB
+        documentIndex: 0
+
+  - it: honours raised world upload limits
+    set:
+      minecraftWrapper.env.MAX_FILE_UPLOAD_SIZE: 5120MB
+      minecraftWrapper.env.WORLD_UPLOAD_MAX_FILE_SIZE_MB: "5120"
+      minecraftWrapper.env.WORLD_UPLOAD_MAX_EXTRACTED_MB: "30720"
+      minecraftWrapper.env.MULTIPART_TEMP_DIR: /mcserver/tmp
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MAX_FILE_UPLOAD_SIZE
+            value: 5120MB
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WORLD_UPLOAD_MAX_FILE_SIZE_MB
+            value: "5120"
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WORLD_UPLOAD_MAX_EXTRACTED_MB
+            value: "30720"
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MULTIPART_TEMP_DIR
+            value: /mcserver/tmp
+        documentIndex: 0

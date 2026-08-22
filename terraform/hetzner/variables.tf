@@ -229,3 +229,61 @@ variable "agent_anthropic_api_key" {
   sensitive   = true
   default     = ""
 }
+
+# --- World upload limits ------------------------------------------------------
+# A world upload passes through four limits in series: nginx's client_max_body_size,
+# the web app's multipart limit, the wrapper's multipart limit, and the wrapper's own
+# WORLD_UPLOAD_MAX_FILE_SIZE_MB check. Setting them independently is how you end up
+# with a bare 413 from a limit you forgot, so the module derives all four from one
+# variable — raise world_upload_max_size_mb and every layer moves together.
+
+variable "world_upload_max_size_mb" {
+  description = "Largest world archive accepted, in MB. Drives nginx's client_max_body_size, both services' multipart limits, and the wrapper's own size check. The wrapper caps a single upload at 2048 MB unless raised here."
+  type        = number
+  default     = 2048
+
+  validation {
+    condition     = var.world_upload_max_size_mb > 0
+    error_message = "world_upload_max_size_mb must be greater than 0."
+  }
+}
+
+variable "world_upload_max_extracted_mb" {
+  description = "Cap on the total extracted size of a world archive, in MB (zip bomb protection). A world expands well past its compressed size, so keep this several times world_upload_max_size_mb, and size mcserver_storage_size to hold the old world and the extracted new one at once."
+  type        = number
+  default     = 10240
+
+  validation {
+    condition     = var.world_upload_max_extracted_mb >= var.world_upload_max_size_mb
+    error_message = "world_upload_max_extracted_mb must be at least world_upload_max_size_mb — an archive cannot extract to less than its compressed size."
+  }
+}
+
+variable "world_upload_max_entries" {
+  description = "Cap on the number of entries in a world archive (zip bomb protection). A very large world can legitimately approach the default; raise it rather than trimming a real world."
+  type        = number
+  default     = 100000
+
+  validation {
+    condition     = var.world_upload_max_entries > 0
+    error_message = "world_upload_max_entries must be greater than 0."
+  }
+}
+
+variable "world_upload_timeout_seconds" {
+  description = "How long the upload routes may run before nginx and the web app give up. Covers transfer plus extraction, the world swap, and the server restart — not just transfer time."
+  type        = number
+  default     = 3600
+}
+
+variable "multipart_temp_dir" {
+  description = "Directory the services buffer an in-flight upload into. Empty uses each container's writable layer, which a multi-GB archive can exhaust. Set to a path on the mcserver volume (e.g. /mcserver/tmp) when raising world_upload_max_size_mb into GB territory."
+  type        = string
+  default     = ""
+}
+
+variable "mcserver_storage_size" {
+  description = "Size of the mcserver PersistentVolumeClaim, which holds the world, plugins, and the staging directory an upload extracts into. Needs room for the old world and the extracted new one at the same time."
+  type        = string
+  default     = "10Gi"
+}

@@ -173,3 +173,23 @@ tests:
                 name: RELEASE-NAME-omcsi-secrets
                 key: DEPLOYMENT_AUTH_TOKEN
         documentIndex: 0
+
+  - it: renders the world upload forward timeout, raisable for large worlds
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WORLD_UPLOAD_READ_TIMEOUT_SECONDS
+            value: "600"
+        documentIndex: 0
+
+  - it: honours a raised world upload forward timeout
+    set:
+      webapp.env.WORLD_UPLOAD_READ_TIMEOUT_SECONDS: "3600"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WORLD_UPLOAD_READ_TIMEOUT_SECONDS
+            value: "3600"
+        documentIndex: 0

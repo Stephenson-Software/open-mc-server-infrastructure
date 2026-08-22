@@ -64,6 +64,15 @@ services:
       # lists/deletes worlds under this path while the wrapper installs uploaded
       # worlds there, so a mismatch silently hides uploads from the dashboard.
       - WORLD_DIRECTORY=${WORLD_DIRECTORY:-/mcserver/world}
+      # World upload limits. A request meets NGINX_MAX_BODY_SIZE, then these
+      # multipart limits, then the WORLD_UPLOAD_* checks — raise them together
+      # or the smallest silently caps the rest.
+      - MAX_FILE_UPLOAD_SIZE=${MAX_FILE_UPLOAD_SIZE:-2048MB}
+      - MAX_REQUEST_UPLOAD_SIZE=${MAX_REQUEST_UPLOAD_SIZE:-2048MB}
+      - MULTIPART_TEMP_DIR=${MULTIPART_TEMP_DIR:-}
+      - WORLD_UPLOAD_MAX_FILE_SIZE_MB=${WORLD_UPLOAD_MAX_FILE_SIZE_MB:-2048}
+      - WORLD_UPLOAD_MAX_EXTRACTED_MB=${WORLD_UPLOAD_MAX_EXTRACTED_MB:-10240}
+      - WORLD_UPLOAD_MAX_ENTRIES=${WORLD_UPLOAD_MAX_ENTRIES:-100000}
       # Web app integration
       - WEBAPP_URL=${WEBAPP_URL:-http://webapp:8080}
       - DEPLOYMENT_AUTH_TOKEN=${DEPLOYMENT_AUTH_TOKEN:-}
@@ -125,6 +134,9 @@ services:
       # Spring multipart limits. nginx (NGINX_MAX_BODY_SIZE) is the effective cap.
       - MAX_FILE_UPLOAD_SIZE=${MAX_FILE_UPLOAD_SIZE:-2048MB}
       - MAX_REQUEST_UPLOAD_SIZE=${MAX_REQUEST_UPLOAD_SIZE:-2048MB}
+      - MULTIPART_TEMP_DIR=${MULTIPART_TEMP_DIR:-}
+      # Covers extraction, the world swap and the restart, not just transfer.
+      - WORLD_UPLOAD_READ_TIMEOUT_SECONDS=${WORLD_UPLOAD_READ_TIMEOUT_SECONDS:-600}
 
   nginx:
     build:
@@ -139,6 +151,8 @@ services:
       # Maximum request body size accepted by the proxy. This is the effective
       # upload cap for the dashboard — raise it alongside MAX_FILE_UPLOAD_SIZE.
       - NGINX_MAX_BODY_SIZE=${NGINX_MAX_BODY_SIZE:-100M}
+      # Applied to the upload routes only; the rest of the dashboard keeps 60s.
+      - NGINX_UPLOAD_TIMEOUT=${NGINX_UPLOAD_TIMEOUT:-3600s}
     depends_on:
       - webapp
     healthcheck:

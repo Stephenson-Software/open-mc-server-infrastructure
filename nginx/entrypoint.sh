@@ -43,6 +43,15 @@ if [ -w "$NGINX_CONF" ]; then
     cat /tmp/nginx.conf.tmp > "$NGINX_CONF"
     rm -f /tmp/nginx.conf.tmp
     echo "Maximum request body size set to ${NGINX_MAX_BODY_SIZE}."
+
+    # Upload-route timeouts. Only the two lines tagged "# upload" are rewritten,
+    # so the dashboard's own 60s proxy timeouts are left alone.
+    NGINX_UPLOAD_TIMEOUT="${NGINX_UPLOAD_TIMEOUT:-3600s}"
+    sed -E "s/(proxy_(send|read)_timeout) [^;]*; # upload/\1 ${NGINX_UPLOAD_TIMEOUT}; # upload/" \
+        "$NGINX_CONF" > /tmp/nginx.conf.tmp
+    cat /tmp/nginx.conf.tmp > "$NGINX_CONF"
+    rm -f /tmp/nginx.conf.tmp
+    echo "Upload route timeout set to ${NGINX_UPLOAD_TIMEOUT}."
 else
     echo "$NGINX_CONF is not writable; using its configured client_max_body_size."
 fi

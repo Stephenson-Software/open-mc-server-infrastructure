@@ -826,15 +826,43 @@ docker compose --env-file .env.dev2 up -d --build
 
 Plugin JARs and world archives are uploaded through the nginx reverse proxy, so the proxy limit is the effective cap — a larger request is rejected with a bare `413 Request Entity Too Large` before the dashboard's own error handling runs.
 
-- `NGINX_MAX_BODY_SIZE`: Maximum request body accepted by nginx (default: `100M`)
-- `MAX_FILE_UPLOAD_SIZE`: Web app per-file multipart limit (default: `2048MB`)
-- `MAX_REQUEST_UPLOAD_SIZE`: Web app total request multipart limit (default: `2048MB`)
+A world upload passes four limits in series, and the smallest one is what a client actually hits:
 
-To allow larger uploads, raise `NGINX_MAX_BODY_SIZE` and keep the two web app limits at or above it. Note the suffixes differ: nginx uses `100M` / `2G`, Spring uses `100MB` / `2048MB`.
+| Setting | Applies to | Default |
+|---|---|---|
+| `NGINX_MAX_BODY_SIZE` | Request body accepted by the proxy | `100M` |
+| `MAX_FILE_UPLOAD_SIZE` / `MAX_REQUEST_UPLOAD_SIZE` | Spring multipart limits, in **both** the web app and the wrapper | `2048MB` |
+| `WORLD_UPLOAD_MAX_FILE_SIZE_MB` | The wrapper's own check on the archive | `2048` |
+| `WORLD_UPLOAD_MAX_EXTRACTED_MB` | Total extracted size — zip bomb protection | `10240` |
 
-World uploads are forwarded to the minecraft-wrapper, whose own multipart limit is fixed at `2048MB`, so that is the ceiling for a world archive regardless of the settings above. Plugin uploads are written directly by the web app and are not subject to it.
+`WORLD_UPLOAD_MAX_ENTRIES` (default `100000`) caps the entry count as further zip bomb protection.
 
-On Kubernetes the equivalent values are `nginx.maxBodySize`, `webapp.env.MAX_FILE_UPLOAD_SIZE`, and `webapp.env.MAX_REQUEST_UPLOAD_SIZE` in `helm/omcsi/values.yaml`.
+To accept larger archives, raise all of them together. Note the suffixes differ: nginx uses `5G`, Spring uses `5120MB`, and the `WORLD_UPLOAD_*` values are plain MB. Raising only one silently leaves the effective cap where it was — and when `NGINX_MAX_BODY_SIZE` is the one that's too low, the rejection is a bare `413 Request Entity Too Large` with no dashboard error at all.
+
+Plugin uploads are written directly by the web app and are subject only to the first two rows.
+
+**Timeouts.** A large upload takes minutes to transfer, and the wrapper does not respond until it has also stopped the server, extracted the archive, swapped the world in and restarted — so the request outlives nginx's ordinary 60s proxy timeout. `NGINX_UPLOAD_TIMEOUT` (default `3600s`) is applied to the upload routes only, leaving the rest of the dashboard at 60s, and `WORLD_UPLOAD_READ_TIMEOUT_SECONDS` (default `600`) is how long the web app waits on the wrapper. Raise both alongside the size limits; keep the web app's value at or below nginx's.
+
+**Buffering.** The upload routes run with `proxy_request_buffering off`, so nginx streams the body through instead of spooling the whole archive to disk first. Each service still buffers the multipart body itself: `MULTIPART_TEMP_DIR` (empty by default) selects where. Empty means the container's own writable layer, which a multi-GB archive can exhaust — point it at a path on the mcserver volume (e.g. `/mcserver/tmp`) before accepting uploads that large. The directory is created at startup if missing.
+
+**A worked example — accepting a 5 GB world archive:**
+
+```bash
+NGINX_MAX_BODY_SIZE=5G
+MAX_FILE_UPLOAD_SIZE=5120MB
+MAX_REQUEST_UPLOAD_SIZE=5120MB
+WORLD_UPLOAD_MAX_FILE_SIZE_MB=5120
+WORLD_UPLOAD_MAX_EXTRACTED_MB=30720   # worlds expand several times over
+MULTIPART_TEMP_DIR=/mcserver/tmp
+NGINX_UPLOAD_TIMEOUT=7200s
+WORLD_UPLOAD_READ_TIMEOUT_SECONDS=7200
+```
+
+On Kubernetes the same values are set through the Helm chart, or through the Terraform variables that drive it — see below.
+
+On Kubernetes the equivalent chart values are `nginx.maxBodySize`, `nginx.uploadTimeout`, the `MAX_*_UPLOAD_SIZE` / `MULTIPART_TEMP_DIR` / `WORLD_UPLOAD_*` entries under `minecraftWrapper.env`, and `MAX_*_UPLOAD_SIZE` / `MULTIPART_TEMP_DIR` / `WORLD_UPLOAD_READ_TIMEOUT_SECONDS` under `webapp.env`, all in `helm/omcsi/values.yaml`.
+
+The Hetzner Terraform module derives every one of them from a single variable so they cannot drift apart — set `TF_VAR_world_upload_max_size_mb` and nginx's cap, both services' multipart limits, and the wrapper's own check all move together. `world_upload_max_extracted_mb`, `world_upload_max_entries`, `world_upload_timeout_seconds`, `multipart_temp_dir`, and `mcserver_storage_size` are exposed alongside it. Note that the module aligns `nginx.maxBodySize` with the app-side limits rather than leaving it at the chart's `100M`, so a Hetzner deployment does not silently cap uploads below what the services advertise.
 
 **Disk headroom for world uploads**: a world archive is extracted into a staging directory next to the world directory — on the same volume — before being renamed into place, because a rename cannot cross filesystems. The server volume therefore needs enough free space to hold the old world and the extracted new one at the same time, roughly twice the size of the larger of the two. Plan for this when sizing the volume (`persistence.mcserver.size` on Kubernetes, default `10Gi`); a world upload that runs out of space fails and leaves the existing world in place. The extracted size is capped at 10 GB regardless.
 

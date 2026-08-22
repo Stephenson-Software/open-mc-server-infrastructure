@@ -95,3 +95,44 @@ tests:
           path: spec.ports[0].nodePort
       - notExists:
           path: spec.ports[1].nodePort
+
+  - it: world routes are proxied to the webapp with request buffering off
+    documentSelector:
+      path: kind
+      value: ConfigMap
+      skipEmptyTemplates: true
+    asserts:
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: "location /api/world/ \\{"
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: "proxy_request_buffering off;"
+
+  - it: upload routes get the upload timeout while the dashboard keeps 60s
+    documentSelector:
+      path: kind
+      value: ConfigMap
+      skipEmptyTemplates: true
+    asserts:
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: "proxy_send_timeout    3600s;"
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: "proxy_read_timeout    60s;"
+
+  - it: upload timeout is configurable via nginx.uploadTimeout
+    set:
+      nginx.uploadTimeout: 7200s
+    documentSelector:
+      path: kind
+      value: ConfigMap
+      skipEmptyTemplates: true
+    asserts:
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: "proxy_read_timeout    7200s;"
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: "proxy_read_timeout    3600s;"
