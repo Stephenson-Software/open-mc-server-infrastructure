@@ -109,7 +109,26 @@ during generation, and a route that survives its feature flag being turned back
 off. The Kubernetes side of the same routes is covered separately by
 `helm/omcsi/tests/nginx_test.yaml` in the Helm Unit Tests job.
 
-### 7. Python Client Tests (`python-client-test`)
+### 7. Server JAR Replacement Test (`jar-replacement-test`)
+
+Runs `scripts/test-jar-replacement.sh`, which extracts `setup_server()` from
+`resources/post-create.sh` and exercises it against fixture directories.
+
+The behaviour being protected is that **an existing server JAR is never removed
+until a verified replacement has been staged**. The upgrade branch previously
+deleted the running JAR and then copied the replacement without checking, so a
+`MINECRAFT_VERSION` ahead of its image tag left a persistent volume holding a
+world, plugins, and nothing to run them with — recoverable only by hand.
+
+Four cases are covered: a version the image does not carry (which must fail and
+change nothing), a genuine upgrade, a version that already matches, and a fresh
+server directory.
+
+No other job reaches this code path. Every other job starts from an empty server
+directory, which takes the first branch of `setup_server()` and never touches
+JAR replacement at all.
+
+### 8. Python Client Tests (`python-client-test`)
 
 Installs `clients/python` with `pip install -e` and runs its `unittest` suite
 on a matrix of Python 3.9 and 3.13 — the floor and the ceiling of the
@@ -130,7 +149,7 @@ The tests themselves need no OMCSI deployment: they stand up a real
 headers, multipart framing, status handling, timeouts — is exercised for real
 rather than mocked.
 
-### 8. End-to-End Server Run (`test-server-run.yml`)
+### 9. End-to-End Server Run (`test-server-run.yml`)
 
 A separate workflow that performs end-to-end testing by actually running
 the Minecraft server in a containerized environment.

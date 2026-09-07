@@ -463,6 +463,28 @@ jobs:
         echo "🔀 Testing nginx route configuration..."
         ./scripts/test-nginx-bluemap-route.sh
         echo "✓ nginx route configuration verified"
+
+  jar-replacement-test:
+    name: Server JAR Replacement Test
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Exercises setup_server() directly against a fixture directory. The
+    # behaviour being protected is that an existing server JAR is never removed
+    # until a verified replacement is staged: a MINECRAFT_VERSION ahead of its
+    # image tag previously deleted the running JAR and then failed to copy the
+    # replacement, leaving a world with nothing to run it. Nothing else in CI
+    # covers this path, because every other job starts from an empty server
+    # directory and so never reaches the upgrade branch.
+    - name: Test server JAR replacement
+      run: |
+        echo "📦 Testing server JAR replacement..."
+        ./scripts/test-jar-replacement.sh
+        echo "✓ server JAR replacement verified"
+
   python-client-test:
     name: Python Client Tests
     runs-on: ubuntu-latest
