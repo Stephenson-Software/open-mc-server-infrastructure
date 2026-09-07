@@ -98,9 +98,14 @@ jobs:
           platforms: linux/amd64,linux/arm64
           build-args: MINECRAFT_VERSION=${{ steps.mc_version.outputs.version }}
           push: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.push_images == 'true' }}
+          # The version tag pins the Minecraft version; the commit SHA pins the
+          # build. Two images can carry the same Minecraft version and differ in
+          # the wrapper, the entrypoint, or the base image, so the version tag
+          # alone is not enough to reproduce a deployment exactly.
           tags: |
             dmccoystephenson/open-mc-server:latest
             dmccoystephenson/open-mc-server:${{ steps.mc_version.outputs.version }}
+            dmccoystephenson/open-mc-server:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           # BuildTools downloads Spigot source and compiles it — this takes ~20 minutes
@@ -176,6 +181,13 @@ jobs:
           # Multi-arch manifest so the image runs on both x86 and ARM hosts.
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.push_images == 'true' }}
-          tags: dmccoystephenson/${{ matrix.name }}:latest
+          # `latest` is kept so nothing that depends on it breaks, and the
+          # commit SHA is added so a deployment can name an exact build. Without
+          # a second tag these images are unpinnable: `latest` moves whenever
+          # this workflow runs, and a pod rescheduled for any unrelated reason
+          # comes back on different code than it went down with.
+          tags: |
+            dmccoystephenson/${{ matrix.name }}:latest
+            dmccoystephenson/${{ matrix.name }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

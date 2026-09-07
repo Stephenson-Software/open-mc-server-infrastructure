@@ -444,7 +444,7 @@ terraform output kubectl_hint        # export KUBECONFIG=... && kubectl get pods
 | `enforce_whitelist` | Also kick connected players who are not whitelisted when the list reloads | `false` |
 | `image_registry` | Container image registry prefix | `dmccoystephenson` |
 | `image_tag` | Tag for the **Minecraft server** image — pin it for reproducible deploys | `latest` |
-| `supporting_image_tag` | Tag for the five supporting images — leave at `latest` (see below) | `latest` |
+| `supporting_image_tag` | Tag for the five supporting images — a commit SHA pins them (see below) | `latest` |
 | `difficulty` | World difficulty (`peaceful`/`easy`/`normal`/`hard`) | `normal` |
 | `gamemode` | Default gamemode (`survival`/`creative`/`adventure`/`spectator`) | `survival` |
 | `pvp_enabled` | Allow players to damage each other | `true` |
@@ -455,7 +455,18 @@ See [`terraform/hetzner/variables.tf`](terraform/hetzner/variables.tf) for the f
 
 > **Pin `image_tag` for anything long-lived.** It defaults to `latest`, and the chart pulls with `imagePullPolicy: Always`. Because the Spigot jar is compiled into the image at build time, a moving `latest` moves the Minecraft version along with it. Set `image_tag` to a published tag — and keep it consistent with `minecraft_version`, since the entrypoint selects the jar by that name and exits if the image does not contain it.
 
-> **Only the Minecraft image has version tags.** `.github/workflows/docker-publish.yml` publishes `open-mc-server` as both `latest` and the Minecraft version it was built with, but publishes the five supporting images (`webapp`, `nginx`, `backup-manager`, `alert-manager`, `agent-manager`) as `latest` **only**. That is why the tag is split across two variables: setting `supporting_image_tag` to a version tag produces `ImagePullBackOff` on those services. Leave it at `latest` unless the publish workflow starts tagging them too.
+> **The two tag variables are pinned differently.** `.github/workflows/docker-publish.yml` publishes `open-mc-server` as `latest`, the Minecraft version it was built with, and the commit SHA. It publishes the five supporting images (`webapp`, `nginx`, `backup-manager`, `alert-manager`, `agent-manager`) as `latest` and the commit SHA — they have no version to be tagged with, which is why the tag is split across two variables.
+>
+> So pin `image_tag` to a Minecraft version (keeping it equal to `minecraft_version`), and pin `supporting_image_tag` to a commit SHA:
+>
+> ```hcl
+> image_tag            = "26.2"
+> supporting_image_tag = "c40d2b7f1e8a94c3b2d5e6f7a8b9c0d1e2f3a4b5"
+> ```
+>
+> **A SHA tag only exists for commits that rebuilt the images.** The publish workflow is path-filtered — it runs when the Dockerfile, a service directory, `resources/`, or the workflow itself changes — so a commit that only touched documentation has no images and no tag. Pick a SHA from a run of that workflow, not an arbitrary commit; `docker manifest inspect dmccoystephenson/open-mc-server-webapp:<sha>` confirms one exists before you deploy it.
+>
+> Leaving both at `latest` is supported and remains the default. It means the running code is whatever was last published, which is fine for a server you rebuild often and wrong for one you want to be able to roll back.
 
 > **`default_plugins` format:** a comma-separated list of direct download URLs to plugin JARs, with no spaces — e.g. `default_plugins = "https://example.com/A.jar,https://example.com/B.jar"`. Each is downloaded into the plugins directory on server setup; a plugin already present there (matched by filename) is left untouched.
 
