@@ -298,6 +298,18 @@ variable "deploy_auth_token" {
   default     = ""
 }
 
+variable "rbac_enabled" {
+  description = "Create namespace-scoped ServiceAccounts (omcsi-viewer, and omcsi-operator when rbac_operator_enabled) for operating this release. Off by default because enabling it mints credentials. The point is that day-to-day work -- monitoring especially -- need not use the cluster-admin kubeconfig Terraform writes, which cannot be revoked. Pair it with allowed_api_cidrs to let a monitoring host reach the API without also getting SSH."
+  type        = bool
+  default     = false
+}
+
+variable "rbac_operator_enabled" {
+  description = "Also create the omcsi-operator ServiceAccount. Requires rbac_enabled. This account is effectively namespace-admin: it can exec into containers and read Secrets, the latter unavoidably, because Helm stores each release revision as a Secret and that includes the one holding the RCON and admin passwords. A large reduction from cluster-admin, but not a low-privilege credential."
+  type        = bool
+  default     = false
+}
+
 variable "agent_manager_enabled" {
   description = "Enable the agent-manager (Discord AI bot) Deployment."
   type        = bool

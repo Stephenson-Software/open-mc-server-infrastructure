@@ -58,6 +58,8 @@ locals {
     discord_webhook_url      = var.discord_webhook_url
     deploy_auth_token        = var.deploy_auth_token
     agent_manager_enabled    = var.agent_manager_enabled
+    rbac_enabled             = var.rbac_enabled
+    rbac_operator_enabled    = var.rbac_operator_enabled
     agent_discord_bot_token  = var.agent_discord_bot_token
     agent_discord_channel_id = var.agent_discord_channel_id
     agent_anthropic_api_key  = var.agent_anthropic_api_key
