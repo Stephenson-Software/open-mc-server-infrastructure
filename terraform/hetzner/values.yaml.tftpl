@@ -116,6 +116,14 @@ persistence:
     storageClass: "${storage_class}"
     size: ${backups_storage_size}
 
+# Namespace-scoped ServiceAccounts for operating this release, so routine work
+# does not need the cluster-admin certificate Terraform wrote. Off unless asked
+# for: enabling it creates credentials.
+rbac:
+  enabled: ${rbac_enabled}
+  operator:
+    enabled: ${rbac_operator_enabled}
+
 secrets:
   rconPassword: "${rcon_password}"
   adminPassword: "${admin_password}"

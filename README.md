@@ -451,6 +451,8 @@ terraform output kubectl_hint        # export KUBECONFIG=... && kubectl get pods
 | `pvp_enabled` | Allow players to damage each other | `true` |
 | `online_mode` | Verify players against Mojang auth | `true` |
 | `default_plugins` | Comma-separated plugin JAR download URLs, installed on setup | `""` |
+| `rbac_enabled` | Create the namespace-scoped `omcsi-viewer` ServiceAccount | `false` |
+| `rbac_operator_enabled` | Also create `omcsi-operator` (namespace-admin; needs `rbac_enabled`) | `false` |
 
 See [`terraform/hetzner/variables.tf`](terraform/hetzner/variables.tf) for the full list (operator identity, MOTD, Discord, agent-manager, NodePort overrides, etc.).
 
