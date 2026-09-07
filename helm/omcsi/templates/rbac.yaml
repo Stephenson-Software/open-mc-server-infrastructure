@@ -1,0 +1,130 @@
+{{- if eq "true" (toString ((.Values.rbac).enabled)) }}
+# Namespace-scoped credentials for operating this release, so day-to-day work
+# does not require the cluster-admin certificate that provisioning produced.
+#
+# The distinction being drawn is not cosmetic. A kubeadm cluster-admin
+# certificate cannot be revoked — Kubernetes has no certificate revocation list,
+# so a leaked one stays valid until it expires no matter what is changed
+# afterwards. A ServiceAccount token can be deleted, and its Role bounds the
+# damage to this namespace even before it is.
+#
+# Two roles, because "read the fleet" and "change the fleet" are different jobs
+# with very different blast radii. See values.yaml for exactly what each grants,
+# including what the operator role can read that you may not expect.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "omcsi.fullname" . }}-viewer
+  labels:
+    {{- include "omcsi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "omcsi.fullname" . }}-viewer
+  labels:
+    {{- include "omcsi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+rules:
+  # Enough to answer "is it up, what is it running, and what do the logs say".
+  # Deliberately excludes secrets and pods/exec: this role is safe to hand to
+  # someone you want watching the server but not operating it.
+  - apiGroups: [""]
+    resources: [pods, services, events, persistentvolumeclaims]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get, list]
+  - apiGroups: [apps]
+    resources: [deployments, replicasets, statefulsets]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "omcsi.fullname" . }}-viewer
+  labels:
+    {{- include "omcsi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "omcsi.fullname" . }}-viewer
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "omcsi.fullname" . }}-viewer
+    namespace: {{ .Release.Namespace }}
+{{- if eq "true" (toString (((.Values.rbac).operator).enabled)) }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "omcsi.fullname" . }}-operator
+  labels:
+    {{- include "omcsi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "omcsi.fullname" . }}-operator
+  labels:
+    {{- include "omcsi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+rules:
+  # Everything the viewer can do.
+  - apiGroups: [""]
+    resources: [pods, services, events, persistentvolumeclaims, configmaps]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get, list]
+  # pods/exec is a console inside the container. It is what makes `kubectl exec`
+  # and any wrapper API call made from inside the pod work, and it is close to
+  # root within that container — granting this role is not the same as granting
+  # read access with extra steps.
+  - apiGroups: [""]
+    resources: [pods/exec]
+    verbs: [create]
+  # Secrets are required for `helm upgrade` and `helm get values`: Helm stores
+  # each release revision as a Secret in this namespace. There is no way to
+  # grant that without also granting read of the release's own Secret, which
+  # holds the RCON and admin passwords. Said plainly because it is the thing
+  # most likely to be assumed otherwise.
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [apps]
+    resources: [deployments, replicasets, statefulsets]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [apps]
+    resources: [deployments/scale]
+    verbs: [get, update, patch]
+  - apiGroups: [policy]
+    resources: [poddisruptionbudgets]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies, ingresses]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [autoscaling]
+    resources: [horizontalpodautoscalers]
+    verbs: [get, list, watch, create, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "omcsi.fullname" . }}-operator
+  labels:
+    {{- include "omcsi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "omcsi.fullname" . }}-operator
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "omcsi.fullname" . }}-operator
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- end }}
