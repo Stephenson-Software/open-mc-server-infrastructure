@@ -449,6 +449,49 @@ podDisruptionBudgets:
   enabled: true
 
 # ---------------------------------------------------------------------------
+# RBAC — namespace-scoped credentials for operating this release
+# ---------------------------------------------------------------------------
+# Disabled by default: enabling it creates ServiceAccounts, and a chart should
+# not mint credentials nobody asked for.
+#
+# The point of these is to stop routine work needing the cluster-admin
+# certificate that provisioning produced. That certificate cannot be revoked --
+# Kubernetes has no certificate revocation list, so a leaked one stays valid
+# until it expires whatever you change afterwards. A ServiceAccount token can be
+# deleted, and its Role bounds the damage to this namespace even before it is.
+#
+# Mint a kubeconfig for one with scripts/service-account-kubeconfig.sh.
+rbac:
+  enabled: false
+
+  # The viewer ServiceAccount can read pods, deployments, services, events,
+  # PVCs and pod logs in this namespace. It CANNOT read Secrets and CANNOT
+  # exec into a container, which makes it safe to hand to someone who should be
+  # able to see whether the server is healthy without being able to operate it
+  # or read the RCON password.
+  #
+  # It is enough for monitoring and for a read-only fleet tool, with one
+  # exception worth knowing: reading the values a Helm release was deployed
+  # with requires Secret access, so a viewer cannot do that.
+
+  operator:
+    # The operator ServiceAccount is effectively namespace-admin: it can run
+    # `helm upgrade`, restart workloads, and exec into containers.
+    #
+    # Two things it grants that are easy to assume it does not:
+    #
+    #   - pods/exec is a console inside the container, close to root within it.
+    #   - Secret access is unavoidable, because Helm stores every release
+    #     revision as a Secret in this namespace. That necessarily includes the
+    #     release's own Secret, which holds the RCON and admin passwords.
+    #
+    # So this is a large reduction from cluster-admin -- it cannot touch other
+    # namespaces, nodes, or cluster-scoped resources, and it can be revoked --
+    # but it is not a low-privilege credential. Treat it as "admin of this
+    # server", which is what it is.
+    enabled: false
+
+# ---------------------------------------------------------------------------
 # Monitoring
 # ---------------------------------------------------------------------------
 # When enabled, a ServiceMonitor is created for each service that exposes

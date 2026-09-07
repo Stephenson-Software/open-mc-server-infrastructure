@@ -1,0 +1,133 @@
+suite: RBAC
+templates:
+  - templates/rbac.yaml
+set:
+  secrets.rconPassword: ci
+  secrets.adminPassword: ci
+tests:
+  - it: renders nothing by default
+    # A chart should not mint credentials nobody asked for.
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders nothing when the rbac key is absent (backward compat)
+    set:
+      rbac: null
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders the viewer trio when enabled
+    set:
+      rbac.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 3
+
+  - it: renders both trios when the operator is also enabled
+    set:
+      rbac.enabled: true
+      rbac.operator.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 6
+
+  - it: does not render the operator without rbac.enabled
+    # rbac.enabled gates the whole file, so operator.enabled alone must not
+    # produce a ServiceAccount that nothing binds.
+    set:
+      rbac.operator.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: names objects after the release
+    set:
+      rbac.enabled: true
+    documentIndex: 0
+    asserts:
+      - isKind:
+          of: ServiceAccount
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-omcsi-viewer
+
+  - it: binds the viewer subject in the release namespace
+    # If this ends up pointing at another namespace the credential silently does
+    # nothing -- it authenticates and is then authorised for no rules at all.
+    set:
+      rbac.enabled: true
+    documentIndex: 2
+    asserts:
+      - isKind:
+          of: RoleBinding
+      - equal:
+          path: subjects[0].namespace
+          value: NAMESPACE
+      - equal:
+          path: subjects[0].name
+          value: RELEASE-NAME-omcsi-viewer
+      - equal:
+          path: roleRef.name
+          value: RELEASE-NAME-omcsi-viewer
+
+  - it: the viewer cannot read secrets
+    # The property that makes this role safe to hand out. If secrets ever appear
+    # in these rules, the role stops being a viewer.
+    set:
+      rbac.enabled: true
+    documentIndex: 1
+    asserts:
+      - isKind:
+          of: Role
+      - notContains:
+          path: rules
+          content:
+            apiGroups: [""]
+            resources: [secrets]
+            verbs: [get, list, watch]
+      - contains:
+          path: rules
+          content:
+            apiGroups: [""]
+            resources: [pods/log]
+            verbs: [get, list]
+
+  - it: the viewer cannot exec into containers
+    set:
+      rbac.enabled: true
+    documentIndex: 1
+    asserts:
+      - notContains:
+          path: rules
+          content:
+            apiGroups: [""]
+            resources: [pods/exec]
+            verbs: [create]
+
+  - it: the operator can exec and read secrets, which is why it is separate
+    set:
+      rbac.enabled: true
+      rbac.operator.enabled: true
+    documentIndex: 4
+    asserts:
+      - isKind:
+          of: Role
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-omcsi-operator
+      - contains:
+          path: rules
+          content:
+            apiGroups: [""]
+            resources: [pods/exec]
+            verbs: [create]
+
+  - it: every rule is namespaced, never cluster-scoped
+    # A ClusterRole here would defeat the entire point of the change.
+    set:
+      rbac.enabled: true
+      rbac.operator.enabled: true
+    asserts:
+      - notFailedTemplate: {}

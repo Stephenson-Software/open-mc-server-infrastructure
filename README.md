@@ -1294,6 +1294,67 @@ convenient — a second machine, a private repository — is a decision that can
 be reversed later. Treat it differently from the passwords above, because it
 behaves differently.
 
+### Operating without the cluster-admin certificate (Kubernetes)
+
+Provisioning produces a cluster-admin kubeconfig, and it is easy for that to
+become the credential everything uses forever — monitoring, scripts, a second
+laptop — because it is the one that already exists and it always works.
+
+Set `rbac.enabled=true` to get a namespace-scoped alternative:
+
+```bash
+helm upgrade omcsi helm/omcsi --namespace omcsi --reuse-values \
+  --set rbac.enabled=true
+
+./scripts/service-account-kubeconfig.sh \
+  --account omcsi-viewer --namespace omcsi \
+  --duration 8h --output ~/omcsi-viewer.kubeconfig
+```
+
+Two accounts, because reading the server and changing it are different jobs:
+
+| | `omcsi-viewer` | `omcsi-operator` (`rbac.operator.enabled=true`) |
+|---|---|---|
+| Pods, deployments, services, events, PVCs | read | read/write |
+| Pod logs | yes | yes |
+| `kubectl exec` into a container | **no** | **yes** |
+| Read Secrets (RCON, admin password) | **no** | **yes** |
+| `helm upgrade`, `helm get values` | no | yes |
+| Anything outside this namespace | no | no |
+
+`omcsi-viewer` is safe to hand to someone who should see whether the server is
+healthy without being able to operate it. `omcsi-operator` is effectively
+**admin of this namespace** — two grants are easy to assume it lacks: `pods/exec`
+is a console inside the container, and Secret access is unavoidable because Helm
+stores every release revision as a Secret, which necessarily includes the one
+holding your passwords.
+
+So the operator account is a large reduction from cluster-admin — no other
+namespace, no nodes, no cluster-scoped resources — but it is not a
+low-privilege credential.
+
+What it *is*, and the admin certificate is not:
+
+- **Time-bound.** `--duration` is honoured by the cluster (which may cap it).
+  The credential stops working on its own.
+- **Revocable.** Deleting the ServiceAccount invalidates its tokens:
+
+  ```bash
+  kubectl -n omcsi delete serviceaccount omcsi-viewer
+  ```
+
+  Not instantly — the API server caches successful token authentication for a
+  few seconds, measured at about 12 seconds on a kubeadm 1.34 cluster. That is a
+  rounding error next to a certificate valid for a year, but it is not zero.
+
+Both accounts are namespace-scoped Roles, never ClusterRoles, and nothing is
+created unless you ask: `rbac.enabled` defaults to `false`, because a chart
+should not mint credentials nobody requested.
+
+> **Docker Compose has no equivalent and needs none.** There is no API server to
+> authenticate to — access to the stack is access to the Docker socket on the
+> host, which is governed by the host's own user permissions.
+
 **For comprehensive security guidance**, especially for public/home hosting, see the **[Self-Hosting Guide](SELF-HOSTING.md)** which covers:
 - Firewall configuration (UFW, iptables, OPNsense, pfSense)
 - DDoS protection and rate limiting

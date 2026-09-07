@@ -60,6 +60,12 @@ in sync when a module is added or removed.
 
 ### 2. Helm Unit Tests (`helm-unit-test`)
 
+Includes `tests/rbac_test.yaml`, which guards the property that makes the viewer
+role worth having: it asserts that the viewer Role contains no `secrets` and no
+`pods/exec` rule. A role that quietly gains either stops being safe to hand out,
+and nothing else would notice.
+
+
 A separate job that installs the
 [`helm-unittest`](https://github.com/helm-unittest/helm-unittest) plugin and
 runs `helm unittest helm/omcsi`. The test suites live under
