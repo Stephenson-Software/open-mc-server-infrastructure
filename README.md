@@ -437,7 +437,8 @@ terraform output kubectl_hint        # export KUBECONFIG=... && kubectl get pods
 | `rcon_password` / `admin_password` | OMCSI secrets | *(required)* |
 | `server_type` | Hetzner server type | `cax31` (ARM, 16 GB) |
 | `location` | Hetzner location (CAX/ARM is EU-only: `fsn1`/`nbg1`/`hel1`) | `fsn1` |
-| `allowed_ssh_cidr` | CIDR allowed to reach SSH (22) and the K8s API (6443) | `0.0.0.0/0` *(restrict this)* |
+| `allowed_ssh_cidr` | CIDR allowed to reach SSH (22), and the K8s API too unless `allowed_api_cidrs` is set | `0.0.0.0/0` *(restrict this)* |
+| `allowed_api_cidrs` | CIDRs allowed to reach the K8s API (6443); empty falls back to `allowed_ssh_cidr` | `[]` |
 | `kubernetes_version` | Kubernetes minor version | `1.34` |
 | `java_opts` | Minecraft JVM heap (sized for 16 GB) | `-Xmx6G -Xms4G` |
 | `whitelist_enabled` | Only players in `whitelist.json` may join | `false` |
@@ -467,6 +468,21 @@ See [`terraform/hetzner/variables.tf`](terraform/hetzner/variables.tf) for the f
 > **A SHA tag only exists for commits that rebuilt the images.** The publish workflow is path-filtered — it runs when the Dockerfile, a service directory, `resources/`, or the workflow itself changes — so a commit that only touched documentation has no images and no tag. Pick a SHA from a run of that workflow, not an arbitrary commit; `docker manifest inspect dmccoystephenson/open-mc-server-webapp:<sha>` confirms one exists before you deploy it.
 >
 > Leaving both at `latest` is supported and remains the default. It means the running code is whatever was last published, which is fine for a server you rebuild often and wrong for one you want to be able to roll back.
+
+> **Granting kubectl without granting SSH.** These were one setting, so allowing
+> a monitoring host to reach the Kubernetes API also gave it a shell on the node.
+> `allowed_api_cidrs` separates them, and being a list it can name more than one
+> operator — which a single CIDR cannot:
+>
+> ```hcl
+> allowed_ssh_cidr  = "203.0.113.4/32"                      # you, with a shell
+> allowed_api_cidrs = ["203.0.113.4/32", "198.51.100.7/32"] # you and a monitor
+> ```
+>
+> Leaving `allowed_api_cidrs` empty keeps the old behaviour exactly: the API
+> falls back to `allowed_ssh_cidr`. Note the fallback is a fallback, not a
+> union — once you set `allowed_api_cidrs`, it is the whole list, so include
+> your own address in it or you will lock yourself out of the API.
 
 > **`default_plugins` format:** a comma-separated list of direct download URLs to plugin JARs, with no spaces — e.g. `default_plugins = "https://example.com/A.jar,https://example.com/B.jar"`. Each is downloaded into the plugins directory on server setup; a plugin already present there (matched by filename) is left untouched.
 

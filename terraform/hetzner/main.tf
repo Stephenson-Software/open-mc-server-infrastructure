@@ -17,6 +17,12 @@ provider "hcloud" {
 locals {
   discord_enabled = var.discord_webhook_url != "" ? "true" : "false"
 
+  # The Kubernetes API and SSH were governed by one variable, so allowing a
+  # monitoring host to run kubectl also handed it a shell on the node. They are
+  # separate rules now; an empty allowed_api_cidrs falls back to the SSH value,
+  # so an existing tfvars file behaves exactly as it did.
+  api_cidrs = length(var.allowed_api_cidrs) > 0 ? var.allowed_api_cidrs : [var.allowed_ssh_cidr]
+
   cloud_init = templatefile("${path.module}/cloud-init.sh.tftpl", {
     kubernetes_version             = var.kubernetes_version
     pod_cidr                       = var.pod_cidr
@@ -95,7 +101,7 @@ resource "hcloud_firewall" "omcsi" {
     direction   = "in"
     protocol    = "tcp"
     port        = "6443"
-    source_ips  = [var.allowed_ssh_cidr]
+    source_ips  = local.api_cidrs
   }
 
   rule {

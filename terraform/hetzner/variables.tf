@@ -43,9 +43,22 @@ variable "ssh_private_key_path" {
 }
 
 variable "allowed_ssh_cidr" {
-  description = "CIDR allowed to reach SSH (22) and the Kubernetes API (6443). Defaults to 0.0.0.0/0 for convenience; STRONGLY recommended to restrict to your own IP (e.g. 203.0.113.4/32). The Minecraft (25565) and web (80/443) ports are always open to the internet."
+  description = "CIDR allowed to reach SSH (22). Also the fallback for the Kubernetes API when allowed_api_cidrs is empty, which is how this behaved before the two were separable. Defaults to 0.0.0.0/0 for convenience; STRONGLY recommended to restrict to your own IP (e.g. 203.0.113.4/32). The Minecraft (25565) and web (80/443) ports are always open to the internet."
   type        = string
   default     = "0.0.0.0/0"
+}
+
+variable "allowed_api_cidrs" {
+  description = "CIDRs allowed to reach the Kubernetes API (6443). Empty means fall back to allowed_ssh_cidr, preserving the previous behaviour where one value governed both. Set it to grant API access without also granting SSH -- a monitoring host needs kubectl, not a shell on the node -- and to allow more than one operator, which a single CIDR cannot express."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for cidr in var.allowed_api_cidrs : can(cidrhost(cidr, 0))
+    ])
+    error_message = "Every entry in allowed_api_cidrs must be a valid CIDR, e.g. 203.0.113.4/32."
+  }
 }
 
 # =============================================================================
