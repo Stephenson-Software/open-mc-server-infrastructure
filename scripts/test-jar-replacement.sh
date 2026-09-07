@@ -50,6 +50,7 @@ assert_false() {
     fi
 }
 
+# shellcheck disable=SC2317  # invoked indirectly, as an argument to assert_true
 contains() {
     case "$1" in
         *"$2"*) return 0 ;;
@@ -57,6 +58,7 @@ contains() {
     esac
 }
 
+# shellcheck disable=SC2317  # invoked indirectly, as an argument to assert_true
 no_staged_files() {
     [ -z "$(find "$TEST_ROOT/server" -name '.incoming-*' 2>/dev/null)" ]
 }
