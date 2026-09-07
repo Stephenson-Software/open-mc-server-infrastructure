@@ -1,0 +1,154 @@
+suite: Ingress
+templates:
+  - templates/ingress.yaml
+set:
+  secrets.rconPassword: ci
+  secrets.adminPassword: ci
+tests:
+  - it: renders nothing by default
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders nothing when the ingress key is absent (backward compat)
+    set:
+      ingress: null
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders an Ingress when enabled
+    set:
+      ingress:
+        enabled: true
+        hosts:
+          - host: oak.example.com
+    asserts:
+      - hasDocuments:
+          count: 1
+      - isKind:
+          of: Ingress
+      - isAPIVersion:
+          of: networking.k8s.io/v1
+
+  - it: routes to this release's nginx, not the webapp
+    # nginx holds the upload body limit, the upload timeouts and the BlueMap
+    # route. Routing around it drops all three silently, and the first symptom
+    # is a bare 413 on a world upload.
+    set:
+      ingress:
+        enabled: true
+        hosts:
+          - host: oak.example.com
+    asserts:
+      - equal:
+          path: spec.rules[0].http.paths[0].backend.service.name
+          value: RELEASE-NAME-omcsi-nginx
+      - equal:
+          path: spec.rules[0].http.paths[0].backend.service.port.number
+          value: 80
+
+  - it: defaults to routing the whole host when no paths are given
+    set:
+      ingress:
+        enabled: true
+        hosts:
+          - host: oak.example.com
+    asserts:
+      - equal:
+          path: spec.rules[0].http.paths[0].path
+          value: "/"
+      - equal:
+          path: spec.rules[0].http.paths[0].pathType
+          value: Prefix
+
+  - it: honours explicit paths
+    set:
+      ingress:
+        enabled: true
+        hosts:
+          - host: oak.example.com
+            paths:
+              - path: /dashboard
+                pathType: Exact
+    asserts:
+      - equal:
+          path: spec.rules[0].http.paths[0].path
+          value: /dashboard
+      - equal:
+          path: spec.rules[0].http.paths[0].pathType
+          value: Exact
+
+  - it: supports several hostnames on one release
+    set:
+      ingress:
+        enabled: true
+        hosts:
+          - host: oak.example.com
+          - host: map.oak.example.com
+    asserts:
+      - lengthEqual:
+          path: spec.rules
+          count: 2
+
+  - it: omits ingressClassName when unset, so the cluster default applies
+    set:
+      ingress:
+        enabled: true
+        hosts:
+          - host: oak.example.com
+    asserts:
+      - notExists:
+          path: spec.ingressClassName
+
+  - it: passes through the class, annotations and TLS as written
+    set:
+      ingress:
+        enabled: true
+        className: traefik
+        annotations:
+          cert-manager.io/cluster-issuer: letsencrypt-prod
+        hosts:
+          - host: oak.example.com
+        tls:
+          - hosts:
+              - oak.example.com
+            secretName: oak-tls
+    asserts:
+      - equal:
+          path: spec.ingressClassName
+          value: traefik
+      - equal:
+          path: metadata.annotations
+          value:
+            cert-manager.io/cluster-issuer: letsencrypt-prod
+      - equal:
+          path: spec.tls[0].secretName
+          value: oak-tls
+      - equal:
+          path: spec.tls[0].hosts[0]
+          value: oak.example.com
+
+  - it: omits the tls block entirely when none is configured
+    # An empty tls: [] would be rendered by some controllers as "TLS expected",
+    # so it must be absent rather than empty.
+    set:
+      ingress:
+        enabled: true
+        hosts:
+          - host: oak.example.com
+    asserts:
+      - notExists:
+          path: spec.tls
+
+  - it: two releases produce distinct backends, which is the point
+    set:
+      fullnameOverride: viridian
+      ingress:
+        enabled: true
+        hosts:
+          - host: oak.example.com
+    asserts:
+      - equal:
+          path: spec.rules[0].http.paths[0].backend.service.name
+          value: viridian-nginx
