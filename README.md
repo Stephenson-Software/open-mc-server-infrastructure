@@ -1237,6 +1237,63 @@ docker compose build --no-cache
 - Regularly backup your world data
 - Keep `RCON_PASSWORD` secure and different from default values
 
+### Keeping credentials out of `.env`
+
+`.env` holds every credential in plaintext by default. That is workable for a
+server you run alone on a machine you own, and it stops being workable the
+moment the file is shared between machines — because the usual way to share it
+is to commit it, and **a value committed once stays in the history forever**.
+Rotating a leaked secret means rotating it at the provider *and* rewriting
+history if you need the old value genuinely gone.
+
+Any value in `.env` can instead be written as a reference, fetched when the
+stack starts rather than stored:
+
+```bash
+RCON_PASSWORD=!ref:cmd:sops -d --extract '["rcon_password"]' secrets.enc.yaml
+HCLOUD_TOKEN=!ref:file:~/.secrets/hcloud-token
+DISCORD_WEBHOOK_URL=!ref:env:OMCSI_DISCORD_WEBHOOK
+```
+
+Three schemes are supported — `env:`, `file:`, and `cmd:`. The SOPS example
+above needs no additional infrastructure: the encrypted file is safe to commit,
+the key that opens it is not.
+
+This is optional and backwards compatible. A `.env` of plain literals keeps
+working exactly as before, and `./up.sh` does no extra work unless a `!ref:` is
+actually present. The `!ref:` sigil exists so that a literal can never be
+mistaken for a reference: a password of `file:something` stays that password.
+
+If any reference fails to resolve, nothing starts. There is no partial startup
+with a blank password.
+
+To resolve values into your own shell — before `terraform apply`, for instance:
+
+```bash
+source <(./scripts/resolve-secrets.sh --format shell)
+```
+
+> **One caveat.** `upgrade.sh`, `rollback.sh` and `trigger-backup.sh` read a few
+> values straight out of `.env` with `grep` — container and volume names only,
+> never secrets. Do not put a reference on `CONTAINER_NAME`, `VOLUME_NAME`, or
+> `BACKUPS_VOLUME_NAME`; those would be read literally.
+
+### Not every credential can be taken back
+
+Worth knowing before deciding what to keep where:
+
+| Credential | If it leaks |
+|---|---|
+| `RCON_PASSWORD`, `ADMIN_PASSWORD`, `DEPLOY_AUTH_TOKEN`, `DISCORD_WEBHOOK_URL` | Rotate at the source and the old value is dead. **Recoverable.** |
+| Cloud provider API token | Rotate and the old value is dead — but until you do, it can create and destroy servers and spend real money. |
+| kubeadm cluster-admin kubeconfig | **Not revocable.** Kubernetes has no certificate revocation list, so a leaked admin certificate stays valid until it expires no matter what you change afterwards. Undoing the leak means rotating the cluster CA and re-issuing every credential on the node. |
+
+The last row is the one that catches people out. A kubeconfig written by
+`terraform apply` is a cluster-admin certificate, and copying it somewhere
+convenient — a second machine, a private repository — is a decision that cannot
+be reversed later. Treat it differently from the passwords above, because it
+behaves differently.
+
 **For comprehensive security guidance**, especially for public/home hosting, see the **[Self-Hosting Guide](SELF-HOSTING.md)** which covers:
 - Firewall configuration (UFW, iptables, OPNsense, pfSense)
 - DDoS protection and rate limiting

@@ -109,7 +109,23 @@ during generation, and a route that survives its feature flag being turned back
 off. The Kubernetes side of the same routes is covered separately by
 `helm/omcsi/tests/nginx_test.yaml` in the Helm Unit Tests job.
 
-### 7. Server JAR Replacement Test (`jar-replacement-test`)
+### 7. Secret Reference Test (`secret-reference-test`)
+
+Runs `scripts/test-secret-references.sh` against `scripts/resolve-secrets.sh`.
+
+Two properties are worth protecting here. A literal value must never be mistaken
+for a reference — these are password fields, and a wrong guess is a silent
+misconfiguration rather than a visible error, which is why the `!ref:` sigil
+exists and why the suite asserts that a value beginning `file:` stays a literal.
+And a failed resolution must neither emit a partial environment nor echo a
+secret: one case deliberately runs a command that writes a secret to stderr and
+exits non-zero, and asserts that secret appears in neither stdout nor the error
+message.
+
+The remaining cases cover the three schemes, quoted values, values containing
+single quotes surviving a round trip through `source`, and argument validation.
+
+### 8. Server JAR Replacement Test (`jar-replacement-test`)
 
 Runs `scripts/test-jar-replacement.sh`, which extracts `setup_server()` from
 `resources/post-create.sh` and exercises it against fixture directories.
@@ -128,7 +144,7 @@ No other job reaches this code path. Every other job starts from an empty server
 directory, which takes the first branch of `setup_server()` and never touches
 JAR replacement at all.
 
-### 8. Python Client Tests (`python-client-test`)
+### 9. Python Client Tests (`python-client-test`)
 
 Installs `clients/python` with `pip install -e` and runs its `unittest` suite
 on a matrix of Python 3.9 and 3.13 — the floor and the ceiling of the
@@ -149,7 +165,7 @@ The tests themselves need no OMCSI deployment: they stand up a real
 headers, multipart framing, status handling, timeouts — is exercised for real
 rather than mocked.
 
-### 9. End-to-End Server Run (`test-server-run.yml`)
+### 10. End-to-End Server Run (`test-server-run.yml`)
 
 A separate workflow that performs end-to-end testing by actually running
 the Minecraft server in a containerized environment.

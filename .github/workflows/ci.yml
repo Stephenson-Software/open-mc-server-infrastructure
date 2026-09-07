@@ -464,6 +464,25 @@ jobs:
         ./scripts/test-nginx-bluemap-route.sh
         echo "✓ nginx route configuration verified"
 
+  secret-reference-test:
+    name: Secret Reference Test
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Exercises scripts/resolve-secrets.sh directly. Two properties are worth
+    # protecting: a literal value must never be mistaken for a reference (these
+    # are password fields, and a wrong guess there is a silent misconfiguration),
+    # and a failed resolution must neither emit a partial environment nor echo a
+    # secret into an error message.
+    - name: Test secret reference resolution
+      run: |
+        echo "🔐 Testing secret reference resolution..."
+        ./scripts/test-secret-references.sh
+        echo "✓ secret reference resolution verified"
+
   jar-replacement-test:
     name: Server JAR Replacement Test
     runs-on: ubuntu-latest
