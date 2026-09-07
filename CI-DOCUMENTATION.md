@@ -65,6 +65,11 @@ role worth having: it asserts that the viewer Role contains no `secrets` and no
 `pods/exec` rule. A role that quietly gains either stops being safe to hand out,
 and nothing else would notice.
 
+`tests/ingress_test.yaml` asserts that the Ingress backend is the release's own
+nginx rather than the webapp. Routing straight to the webapp would appear to
+work while silently dropping the upload body limit, the upload timeouts and the
+BlueMap route, all of which live in nginx.
+
 
 A separate job that installs the
 [`helm-unittest`](https://github.com/helm-unittest/helm-unittest) plugin and

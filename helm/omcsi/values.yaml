@@ -461,6 +461,51 @@ podDisruptionBudgets:
 # deleted, and its Role bounds the damage to this namespace even before it is.
 #
 # Mint a kubeconfig for one with scripts/service-account-kubeconfig.sh.
+# ---------------------------------------------------------------------------
+# Ingress — host-based routing (required to co-locate releases)
+# ---------------------------------------------------------------------------
+# Off by default, because the default single-server topology reaches the outside
+# world through nginx's own Service and needs no ingress controller.
+#
+# Turn this on when more than one release shares a cluster. Each release gets a
+# hostname rather than a port, and hostnames do not run out. Set
+# nginx.service.type=ClusterIP at the same time: with an Ingress in front, a
+# LoadBalancer or a fixed NodePort per release is exactly the thing being
+# avoided.
+#
+#   ingress:
+#     enabled: true
+#     className: traefik
+#     hosts:
+#       - host: oak-hollow.example.com
+#     tls:
+#       - hosts: [oak-hollow.example.com]
+#         secretName: oak-hollow-tls
+#   nginx:
+#     service:
+#       type: ClusterIP
+#
+# The backend is this release's nginx, not the webapp: nginx holds the upload
+# body limit, the upload timeouts, and the BlueMap route, so routing around it
+# would drop all three silently.
+#
+# Note this covers HTTP only. The Minecraft port is a raw TCP protocol and
+# cannot be routed by an HTTP Ingress -- see "Co-locating servers" in README.md
+# for how the game port is shared.
+ingress:
+  enabled: false
+  # IngressClass to use, e.g. "traefik" or "nginx". Empty uses the cluster
+  # default IngressClass, if one is marked as such.
+  className: ""
+  # Annotations for the controller, and for cert-manager if it issues the
+  # certificate, e.g. cert-manager.io/cluster-issuer: letsencrypt-prod
+  annotations: {}
+  # One entry per hostname. `paths` may be omitted, which routes the whole host.
+  hosts: []
+  # TLS blocks, passed through as written. Omit to serve plain HTTP, which is
+  # only reasonable behind a controller that terminates TLS itself.
+  tls: []
+
 rbac:
   enabled: false
 

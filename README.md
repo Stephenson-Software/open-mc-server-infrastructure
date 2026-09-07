@@ -1226,6 +1226,93 @@ docker compose build --no-cache
 - Adjust memory allocation in `sample.env` by setting appropriate values
 - Monitor system resources: `docker stats open-mc-server` (use your `CONTAINER_NAME` value)
 
+## Co-locating servers
+
+One release per machine is the default and the simplest thing that works. It
+also puts a fixed monthly floor under every server, which is most of the cost
+for a small one. Several releases can share a cluster instead.
+
+The chart is release-scoped throughout — every Deployment, Service, PVC and
+Secret is named through `omcsi.fullname` — so two releases in one namespace
+produce no colliding objects. What has to be arranged is the three things that
+are node-wide rather than release-scoped: the HTTP port, the HTTPS port, and the
+Minecraft port.
+
+### HTTP and HTTPS: give each release a hostname
+
+Ports run out; hostnames do not. Enable the Ingress and stop the Service
+claiming an address of its own:
+
+```yaml
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: oak-hollow.example.com
+  tls:
+    - hosts: [oak-hollow.example.com]
+      secretName: oak-hollow-tls
+nginx:
+  service:
+    type: ClusterIP
+```
+
+`nginx.service.type: ClusterIP` matters. Leaving it as `LoadBalancer` asks for a
+separate external address per release, which is the cost the Ingress exists to
+avoid.
+
+The Ingress routes to that release's **own nginx**, not to the webapp directly.
+nginx is where the upload body limit, the long upload timeouts and the BlueMap
+route live, so routing around it drops all three — and the first symptom is a
+bare 413 partway through a world upload.
+
+### The Minecraft port: an Ingress cannot help
+
+The Minecraft protocol is neither HTTP nor TLS, so an HTTP Ingress cannot route
+it and there is no SNI to route on. Two options:
+
+**Separate ports.** Leave `minecraftWrapper.service.nodePort` empty and each
+release gets an auto-assigned port in the NodePort range. This works today and
+needs nothing extra. Players connect to `example.com:31234`, which is
+serviceable but easy to get wrong when typing it.
+
+**A Minecraft-aware proxy.** The handshake packet carries the hostname the
+player typed, so a proxy such as Velocity or BungeeCord can read it and route to
+the right backend over a single port 25565 — `oak.example.com` and
+`gulf.example.com` both on the standard port. This is how commercial hosts do
+it.
+
+OMCSI does not ship that proxy, and the chart's only job here is to stop
+claiming 25565 so something else can hold it. Set
+`minecraftWrapper.service.type: ClusterIP` and point the proxy at the resulting
+Service.
+
+Two things to know before going that way, because both are easy to discover
+late:
+
+- Spigot supports **BungeeCord-style** forwarding (`settings.bungeecord: true`
+  in `spigot.yml`). Velocity's modern forwarding requires Paper, which is not
+  what this image builds.
+- Once a backend trusts a proxy for player identity, it **must not be reachable
+  directly**. A backend in that mode accepts whatever username it is told, so an
+  exposed one lets anyone connect as anyone. Keep the backends on ClusterIP and
+  let only the proxy reach them.
+
+### Sizing
+
+The defaults assume a machine per server: `4Gi` requested and `8Gi` limit for
+the wrapper alone, with `JAVA_OPTS` at `-Xmx6G`. Three of those want a node with
+somewhere north of 12Gi before anything else is scheduled.
+
+Co-location means revisiting those numbers per release rather than inheriting
+them, and the memory limit and `-Xmx` have to move together — a heap larger than
+the limit is an OOMKill under load rather than a garbage collection.
+
+Each release also keeps its own PersistentVolumeClaims, so disk adds up in the
+same way. On a single-node cluster using `local-path`, that is all one disk.
+
 ## Security Notes
 
 - **HTTPS Enabled**: All web dashboard connections are encrypted using HTTPS to protect admin credentials

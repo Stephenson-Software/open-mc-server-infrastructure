@@ -1,0 +1,56 @@
+{{- if eq "true" (toString ((.Values.ingress).enabled)) }}
+# Host-based routing for the dashboard and map, so several releases can share
+# one node without fighting over ports.
+#
+# Without this, each release reaches the outside world through its own Service:
+# a LoadBalancer (one address each) or a NodePort (one port each, and only one
+# release can hold 80/443 on a given node). Neither composes. An Ingress gives
+# each release a hostname instead, and hostnames are not a finite resource.
+#
+# The backend is deliberately this release's own nginx, not the webapp directly.
+# nginx is where the upload body limit, the long upload timeouts, and the
+# BlueMap route live; bypassing it would silently drop all three and the first
+# symptom would be a bare 413 on a world upload.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "omcsi.fullname" . }}
+  labels:
+    {{- include "omcsi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ingress
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . | quote }}
+  {{- end }}
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- range .Values.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      {{- with .secretName }}
+      secretName: {{ . | quote }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range (.paths | default (list (dict "path" "/" "pathType" "Prefix"))) }}
+          - path: {{ .path | quote }}
+            pathType: {{ .pathType | default "Prefix" }}
+            backend:
+              service:
+                name: {{ include "omcsi.fullname" $ }}-nginx
+                port:
+                  number: {{ $.Values.nginx.service.httpPort }}
+          {{- end }}
+    {{- end }}
+{{- end }}
