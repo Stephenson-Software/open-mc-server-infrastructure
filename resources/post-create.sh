@@ -94,19 +94,56 @@ setup_server() {
         
         # Check if the expected JAR for this version exists
         if [ ! -f "$expected_jar" ]; then
-            # The expected JAR doesn't exist, so we need to upgrade
+            # The image carries only the Spigot JAR it was built with, so
+            # "$new_jar" is absent whenever MINECRAFT_VERSION names a version
+            # this image was not built for. That is reachable whenever the image
+            # tag is not pinned alongside the version.
+            #
+            # Refuse before touching anything. A server that will not start is
+            # recoverable by correcting the version or the tag; a server
+            # directory with the world still in it and no JAR to run it is a
+            # manual restore.
+            if [ ! -f "$new_jar" ]; then
+                local available
+                available=$(find "$BUILD_DIR" -maxdepth 1 -name 'spigot-*.jar' -exec basename {} \; 2>/dev/null | tr '\n' ' ')
+                log "ERROR: MINECRAFT_VERSION is ${MINECRAFT_VERSION}, but this image does not contain spigot-${MINECRAFT_VERSION}.jar."
+                log "ERROR: The image contains: ${available:-none}"
+                log "ERROR: Pin the image tag to the same version as MINECRAFT_VERSION and redeploy."
+                log "ERROR: The existing server JAR has been left untouched."
+                return 1
+            fi
+
             log "Detected version change - updating server JAR to ${MINECRAFT_VERSION}..."
-            
-            # Check if there are old version JARs to remove
+
+            # Stage the replacement fully before removing anything, so an
+            # interrupted or short copy cannot leave the directory with no JAR.
+            # The staged name is dot-prefixed so it can never be caught by the
+            # spigot-*.jar cleanup glob below.
+            local staged_jar="$SERVER_DIR/.incoming-spigot-${MINECRAFT_VERSION}.jar"
+            rm -f "$staged_jar"
+            if ! cp "$new_jar" "$staged_jar"; then
+                rm -f "$staged_jar"
+                log "ERROR: failed to copy ${new_jar}. The existing server JAR has been left untouched."
+                return 1
+            fi
+            # Guards against a truncated copy, which a full volume produces
+            # without cp itself failing on every platform.
+            if ! cmp -s "$new_jar" "$staged_jar"; then
+                rm -f "$staged_jar"
+                log "ERROR: staged JAR does not match ${new_jar} (out of disk space?). The existing server JAR has been left untouched."
+                return 1
+            fi
+
+            # Only now is it safe to remove the old JARs.
             if ls "$SERVER_DIR"/spigot-*.jar >/dev/null 2>&1; then
                 local old_jars
                 old_jars=$(find "$SERVER_DIR" -name "spigot-*.jar" -exec basename {} \;)
                 log "Removing old JAR(s): $old_jars"
                 rm -f "$SERVER_DIR"/spigot-*.jar
             fi
-            
-            # Copy new version JAR
-            cp "$new_jar" "$expected_jar"
+
+            # Rename within the same directory, so the JAR appears atomically.
+            mv "$staged_jar" "$expected_jar"
             log "Server JAR updated successfully to version ${MINECRAFT_VERSION}."
         else
             log "Server JAR is up to date (version ${MINECRAFT_VERSION})."
