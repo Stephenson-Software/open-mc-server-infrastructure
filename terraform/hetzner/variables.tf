@@ -143,7 +143,7 @@ variable "image_tag" {
 }
 
 variable "supporting_image_tag" {
-  description = "Image tag for the five supporting images (webapp, nginx, backup-manager, alert-manager, agent-manager). Defaults to 'latest' and should normally stay there: CI publishes these images with the 'latest' tag ONLY, so pointing this at a version tag yields ImagePullBackOff. It is exposed separately from image_tag so the Minecraft image can be pinned without dragging the others to a tag that does not exist."
+  description = "Image tag for the five supporting images (webapp, nginx, backup-manager, alert-manager, agent-manager). Defaults to 'latest', which moves whenever the publish workflow runs. For a reproducible deployment set it to a commit SHA: CI publishes each supporting image as both 'latest' and the SHA of the commit that built it. These images carry no version tag, which is why this is separate from image_tag -- the Minecraft image is pinned by Minecraft version, the supporting images by commit. Note that the publish workflow is path-filtered, so a SHA tag exists only for commits that actually rebuilt the images."
   type        = string
   default     = "latest"
 
