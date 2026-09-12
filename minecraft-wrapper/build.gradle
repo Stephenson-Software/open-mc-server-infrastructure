@@ -37,6 +37,15 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 
+// Bakes the version above into META-INF/build-info.properties so the wrapper can report
+// it at runtime (Spring Boot's BuildProperties); nothing else reads the file.
+springBoot {
+    buildInfo()
+}
+
 tasks.named('test') {
     useJUnitPlatform()
+    // Never report a test run to the trace service (see usage-reporting.* in
+    // application.properties); the stub-backed tests set their own endpoint explicitly.
+    environment 'USAGE_REPORTING_ENABLED', 'false'
 }

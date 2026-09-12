@@ -167,6 +167,7 @@ services:
 - Keep system and Docker images updated: `sudo apt-get upgrade -y && docker compose pull && ./up.sh`
 - Run backups regularly: `./trigger-backup.sh` (store copies offsite)
 - Never expose RCON (port 25575) publicly; use the web dashboard or SSH tunnel instead
+- Know what leaves your network: the wrapper sends one anonymous `startup` event (program name and version only) to the project's usage service on every start. Set `USAGE_REPORTING_ENABLED=false` in `.env` to turn it off — see "Usage Reporting" in the README
 
 ## Firewall Configuration
 

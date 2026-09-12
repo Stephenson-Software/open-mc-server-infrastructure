@@ -126,6 +126,11 @@ alert.manager.url=http://alert-manager:8090/api/alerts
 alerts.server.start=true
 alerts.server.stop=true
 alerts.server.crash=true
+
+# Usage reporting (one "startup" event per start; see the root README)
+usage-reporting.enabled=true
+usage-reporting.endpoint=https://trace.danielstephenson.dev
+usage-reporting.tags=
 ```
 
 ### Environment Variables
@@ -139,6 +144,10 @@ alerts.server.crash=true
 - `ALERTS_SERVER_START`: Enable server start alerts (default: `true`)
 - `ALERTS_SERVER_STOP`: Enable server stop alerts (default: `true`)
 - `ALERTS_SERVER_CRASH`: Enable server crash alerts (default: `true`)
+- `USAGE_REPORTING_ENABLED`: Send one `startup` event (program name, version and `USAGE_REPORTING_TAGS` only) to the trace usage service once the wrapper is up. Logged as one `INFO` line on every start; set to `false` to turn it off (default: `true`)
+- `USAGE_REPORTING_ENDPOINT`: Where that event goes (default: `https://trace.danielstephenson.dev`)
+- `USAGE_REPORTING_KEY`: Program key (default: the project's bundled write-only key)
+- `USAGE_REPORTING_TAGS`: Comma-separated `k=v` pairs attached to the event, e.g. `ci=true`; `version` is reserved (default: empty)
 
 ## Building
 
@@ -156,7 +165,10 @@ Tests are split across the service and controller layers — run `./gradlew test
 to see the current count and breakdown. The current suite covers, at minimum:
 
 - Service layer: `AlertServiceTest`, `MessageServiceTest`, `ShutdownServiceTest`,
-  `PluginDeployServiceTest`
+  `PluginDeployServiceTest`, `UsageReportingServiceTest` (against a stub trace
+  server on a loopback port — no test ever reaches the real service, and the
+  Gradle `test` task sets `USAGE_REPORTING_ENABLED=false` for every other test)
+- Vendored trace client: `TraceClientTest`
 - Controller layer: `ServerControllerTest`, `MessageControllerTest`,
   `PluginDeployControllerTest`
 - Application bootstrapping: `MinecraftWrapperApplicationTest`

@@ -122,6 +122,19 @@ minecraftWrapper:
     # Diagnostic log access
     LOGS_DIAGNOSTIC_ENABLED: "false"
     LOGS_DIAGNOSTIC_MAX_LINES: "100"
+    # Usage reporting (see "Usage Reporting" in README.md). Once the wrapper is up
+    # it sends ONE "startup" event to https://github.com/Stephenson-Software/trace
+    # carrying the program name (open-mc-server-infrastructure), the wrapper's
+    # version and USAGE_REPORTING_TAGS — nothing per request or per player, and
+    # nothing about the world, the operator, the host or its address. On by
+    # default; "false" turns it off. The key is the project's write-only program
+    # key, not a credential, which is why it lives here rather than in a Secret.
+    USAGE_REPORTING_ENABLED: "true"
+    USAGE_REPORTING_ENDPOINT: "https://trace.danielstephenson.dev"
+    USAGE_REPORTING_KEY: "9Q2Q3NTQCZbqdMhF-8-rrMOm_N4e47JqT0VnRt2t6_A"
+    # Optional comma-separated k=v tags attached to the event, e.g. "ci=true" so a
+    # CI deployment can be told apart from a real one. "version" is reserved.
+    USAGE_REPORTING_TAGS: ""
 
 # ---------------------------------------------------------------------------
 # Web Application (Dashboard)

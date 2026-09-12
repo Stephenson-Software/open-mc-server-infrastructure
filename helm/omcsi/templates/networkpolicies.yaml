@@ -102,7 +102,8 @@ spec:
     # Mojang authentication (online-mode=true) and any other external HTTPS
     # Required for player login via api.minecraftservices.com / sessionserver.mojang.com,
     # and also covers DEFAULT_PLUGINS downloads (post-create.sh fetches plugin JARs
-    # over HTTPS during server setup).
+    # over HTTPS during server setup) and the wrapper's one usage-reporting POST to
+    # USAGE_REPORTING_ENDPOINT (https://trace.danielstephenson.dev by default).
     - ports:
         - port: 443
           protocol: TCP

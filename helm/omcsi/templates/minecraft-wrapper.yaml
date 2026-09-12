@@ -135,6 +135,16 @@ spec:
               value: {{ .Values.minecraftWrapper.env.LOGS_DIAGNOSTIC_ENABLED | quote }}
             - name: LOGS_DIAGNOSTIC_MAX_LINES
               value: {{ .Values.minecraftWrapper.env.LOGS_DIAGNOSTIC_MAX_LINES | quote }}
+            # Usage reporting: one "startup" event per start, opt-out via
+            # USAGE_REPORTING_ENABLED=false (see values.yaml).
+            - name: USAGE_REPORTING_ENABLED
+              value: {{ .Values.minecraftWrapper.env.USAGE_REPORTING_ENABLED | quote }}
+            - name: USAGE_REPORTING_ENDPOINT
+              value: {{ .Values.minecraftWrapper.env.USAGE_REPORTING_ENDPOINT | quote }}
+            - name: USAGE_REPORTING_KEY
+              value: {{ .Values.minecraftWrapper.env.USAGE_REPORTING_KEY | quote }}
+            - name: USAGE_REPORTING_TAGS
+              value: {{ .Values.minecraftWrapper.env.USAGE_REPORTING_TAGS | quote }}
           # startupProbe gives the JVM time to initialise before liveness kicks in.
           # failureThreshold × periodSeconds = 10 minutes — enough for Spigot's
           # first-boot BuildTools compilation.
