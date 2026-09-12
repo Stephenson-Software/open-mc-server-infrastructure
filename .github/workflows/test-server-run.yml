@@ -31,6 +31,8 @@ jobs:
         sed -i 's/YOUR_USERNAME_HERE/TestPlayer/g' .env
         # Use lighter memory settings for CI
         sed -i 's/-Xmx3G -Xms2G/-Xmx1G -Xms512M/g' .env
+        # Tag this run's usage-reporting startup event so it is not counted as a real deployment
+        sed -i 's/^USAGE_REPORTING_TAGS=.*/USAGE_REPORTING_TAGS=ci=true/' .env
         echo "✓ Environment file created"
         
     - name: Build required images

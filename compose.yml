@@ -78,6 +78,14 @@ services:
       # Web app integration
       - WEBAPP_URL=${WEBAPP_URL:-http://webapp:8080}
       - DEPLOYMENT_AUTH_TOKEN=${DEPLOYMENT_AUTH_TOKEN:-}
+      # Usage reporting (see "Usage Reporting" in README.md). The wrapper sends one
+      # "startup" event per start — program name, version and USAGE_REPORTING_TAGS only.
+      # On by default; USAGE_REPORTING_ENABLED=false turns it off. The key default is the
+      # project's write-only program key, so an unset .env still reports.
+      - USAGE_REPORTING_ENABLED=${USAGE_REPORTING_ENABLED:-true}
+      - USAGE_REPORTING_ENDPOINT=${USAGE_REPORTING_ENDPOINT:-https://trace.danielstephenson.dev}
+      - USAGE_REPORTING_KEY=${USAGE_REPORTING_KEY:-9Q2Q3NTQCZbqdMhF-8-rrMOm_N4e47JqT0VnRt2t6_A}
+      - USAGE_REPORTING_TAGS=${USAGE_REPORTING_TAGS:-}
 
   webapp:
     build:

@@ -374,3 +374,44 @@ tests:
             name: MULTIPART_TEMP_DIR
             value: /mcserver/tmp
         documentIndex: 0
+
+  # Usage reporting must be on by default (so an untouched install reports) and
+  # must be switchable off from values, since operators are told that is the opt-out.
+  - it: usage reporting is on by default and pointed at the project's trace service
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: USAGE_REPORTING_ENABLED
+            value: "true"
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: USAGE_REPORTING_ENDPOINT
+            value: "https://trace.danielstephenson.dev"
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: USAGE_REPORTING_TAGS
+            value: ""
+        documentIndex: 0
+
+  - it: usage reporting can be turned off and tagged from values
+    set:
+      minecraftWrapper.env.USAGE_REPORTING_ENABLED: "false"
+      minecraftWrapper.env.USAGE_REPORTING_TAGS: "ci=true"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: USAGE_REPORTING_ENABLED
+            value: "false"
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: USAGE_REPORTING_TAGS
+            value: "ci=true"
+        documentIndex: 0

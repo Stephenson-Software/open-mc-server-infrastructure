@@ -183,7 +183,9 @@ the Minecraft server in a containerized environment.
 
 #### Server Build and Startup
 - **Docker Image Build**: Builds the complete Minecraft server Docker image with Spigot
-- **Server Initialization**: Starts the server with test configuration and waits for full initialization
+- **Server Initialization**: Starts the server with test configuration and waits for full initialization.
+  The test `.env` sets `USAGE_REPORTING_TAGS=ci=true`, so the wrapper's one usage-reporting
+  `startup` event is tagged as a CI run rather than counted as a real deployment
 - **Startup Verification**: Monitors server logs to confirm successful startup sequence completion
 
 #### Functionality Testing
