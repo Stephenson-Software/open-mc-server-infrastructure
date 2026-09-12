@@ -1590,7 +1590,7 @@ with a warning and listed in the summary at the end of the run.
 ### CI Pipeline Status
 
 The CI pipeline runs on:
-- Every push to `main` and `develop` branches
+- Every push to `main`
 - Every pull request to `main`
 
 Check the [Actions tab](https://github.com/dmccoystephenson/open-mc-server-infrastructure/actions) for detailed CI results and logs.
