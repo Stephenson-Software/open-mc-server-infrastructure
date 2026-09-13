@@ -1298,6 +1298,23 @@ Minecraft port.
 
 ### HTTP and HTTPS: give each release a hostname
 
+The chart ships the whole set of correlated edits as one profile,
+[`helm/omcsi/values-colocated.yaml`](helm/omcsi/values-colocated.yaml): small
+requests and limits with a matching `-Xmx`, both Services on `ClusterIP`, the
+Ingress on, backup-manager and alert-manager off, no PodDisruptionBudgets, and
+the wrapper born asleep for a router to wake. Apply it and supply only what is
+per release:
+
+```bash
+helm install oak ./helm/omcsi -n oak --create-namespace \
+  -f helm/omcsi/values-colocated.yaml \
+  --set "ingress.hosts[0].host=oak.example.com" \
+  --set "minecraftWrapper.service.annotations.mc-router\.itzg\.me/externalServerName=oak.example.com" \
+  --set secrets.rconPassword=... --set secrets.adminPassword=...
+```
+
+The rest of this section explains what the profile sets and why.
+
 Ports run out; hostnames do not. Enable the Ingress and stop the Service
 claiming an address of its own:
 

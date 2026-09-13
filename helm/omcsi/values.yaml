@@ -195,6 +195,9 @@ webapp:
     WORLD_UPLOAD_READ_TIMEOUT_SECONDS: "600"
     MINECRAFT_WRAPPER_ENABLED: "true"
     WORLD_DIRECTORY: "/mcserver/world"
+    # JVM flags for the dashboard, e.g. "-Xmx160m" to fit a small memory limit
+    # when several releases share a node. Empty means the JVM sizes itself.
+    JAVA_TOOL_OPTIONS: ""
   # webapp mounts the mcserver and webapp-data PVCs directly. Scaling beyond
   # 1 replica requires persistence.mcserver.accessMode AND
   # persistence.webappData.accessMode to both be ReadWriteMany (see the
