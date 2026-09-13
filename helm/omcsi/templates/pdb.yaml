@@ -26,6 +26,7 @@ spec:
   selector:
     matchLabels:
       {{- include "omcsi.selectorLabels" (dict "root" . "component" "webapp") | nindent 6 }}
+{{- if .Values.alertManager.enabled }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget
@@ -38,4 +39,5 @@ spec:
   selector:
     matchLabels:
       {{- include "omcsi.selectorLabels" (dict "root" . "component" "alert-manager") | nindent 6 }}
+{{- end }}
 {{- end }}

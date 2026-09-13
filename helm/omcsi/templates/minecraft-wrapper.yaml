@@ -84,8 +84,10 @@ spec:
                 secretKeyRef:
                   name: {{ include "omcsi.secretName" . }}
                   key: RCON_PASSWORD
+            # Empty when alertManager.enabled=false; the wrapper skips alerts for
+            # an unconfigured URL rather than failing on an unreachable one.
             - name: ALERT_MANAGER_URL
-              value: "http://{{ include "omcsi.alertManagerHost" . }}:{{ .Values.alertManager.service.port }}/api/alerts"
+              value: {{ if .Values.alertManager.enabled }}"http://{{ include "omcsi.alertManagerHost" . }}:{{ .Values.alertManager.service.port }}/api/alerts"{{ else }}""{{ end }}
             - name: ALERTS_SERVER_START
               value: {{ .Values.minecraftWrapper.env.ALERTS_SERVER_START | quote }}
             - name: ALERTS_SERVER_STOP

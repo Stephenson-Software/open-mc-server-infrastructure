@@ -1,0 +1,152 @@
+suite: service toggles (backupManager.enabled / alertManager.enabled)
+templates:
+  - templates/alert-manager.yaml
+  - templates/backup-manager.yaml
+  - templates/minecraft-wrapper.yaml
+  - templates/webapp.yaml
+  - templates/pvc.yaml
+  - templates/pdb.yaml
+  - templates/hpa.yaml
+  - templates/networkpolicies.yaml
+set:
+  secrets.rconPassword: ci
+  secrets.adminPassword: ci
+tests:
+  - it: renders alert-manager and backup-manager by default
+    templates: [templates/alert-manager.yaml, templates/backup-manager.yaml]
+    asserts:
+      - hasDocuments:
+          count: 2
+
+  - it: renders nothing for alert-manager when disabled
+    template: templates/alert-manager.yaml
+    set:
+      alertManager.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: renders nothing for backup-manager when disabled
+    template: templates/backup-manager.yaml
+    set:
+      backupManager.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: gives the wrapper an empty ALERT_MANAGER_URL when alert-manager is disabled
+    template: templates/minecraft-wrapper.yaml
+    set:
+      alertManager.enabled: false
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ALERT_MANAGER_URL
+            value: ""
+        documentIndex: 0
+
+  - it: keeps the wrapper's ALERT_MANAGER_URL pointed at the release's alert-manager by default
+    template: templates/minecraft-wrapper.yaml
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ALERT_MANAGER_URL
+            value: http://RELEASE-NAME-omcsi-alert-manager:8090/api/alerts
+        documentIndex: 0
+
+  - it: switches the webapp's alert integration off when alert-manager is disabled
+    template: templates/webapp.yaml
+    set:
+      alertManager.enabled: false
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ALERT_MANAGER_ENABLED
+            value: "false"
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ALERT_MANAGER_URL
+            value: ""
+        documentIndex: 0
+
+  - it: forces backup alerts off when alert-manager is disabled but backup-manager is not
+    template: templates/backup-manager.yaml
+    set:
+      alertManager.enabled: false
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ALERTS_BACKUP_SUCCESS
+            value: "false"
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ALERTS_BACKUP_FAILURE
+            value: "false"
+        documentIndex: 0
+
+  - it: omits the alert-manager-data and backups PVCs when their services are disabled
+    template: templates/pvc.yaml
+    set:
+      alertManager.enabled: false
+      backupManager.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 2
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-omcsi-mcserver
+        documentIndex: 0
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-omcsi-webapp-data
+        documentIndex: 1
+
+  - it: omits the alert-manager PodDisruptionBudget when disabled
+    template: templates/pdb.yaml
+    set:
+      alertManager.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 2
+      - notEqual:
+          path: metadata.name
+          value: RELEASE-NAME-omcsi-alert-manager
+        documentIndex: 1
+
+  - it: does not render an alert-manager HPA when disabled even if autoscaling is on
+    template: templates/hpa.yaml
+    set:
+      alertManager.enabled: false
+      alertManager.autoscaling.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: omits the alert-manager and backup-manager NetworkPolicies when disabled
+    template: templates/networkpolicies.yaml
+    set:
+      alertManager.enabled: false
+      backupManager.enabled: false
+    asserts:
+      - hasDocuments:
+          count: 3
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-omcsi-minecraft-wrapper
+        documentIndex: 0
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-omcsi-webapp
+        documentIndex: 1
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-omcsi-nginx
+        documentIndex: 2

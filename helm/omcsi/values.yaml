@@ -280,6 +280,11 @@ nginx:
 # Backup Manager
 # ---------------------------------------------------------------------------
 backupManager:
+  # Set to false to leave the backup-manager out of the release entirely (no
+  # Deployment, Service, NetworkPolicy, ServiceMonitor, or backups PVC).
+  # Sensible when several releases share a node and one platform-level job
+  # backs up every world instead; see "Co-locating servers" in README.md.
+  enabled: true
   image:
     repository: dmccoystephenson/open-mc-server-backup-manager
     tag: latest
@@ -311,6 +316,11 @@ backupManager:
 # Alert Manager
 # ---------------------------------------------------------------------------
 alertManager:
+  # Set to false to leave the alert-manager out of the release entirely. The
+  # wrapper, webapp and backup-manager then get an empty ALERT_MANAGER_URL /
+  # alerts switched off, so nothing tries to POST to a service that is not
+  # there.
+  enabled: true
   image:
     repository: dmccoystephenson/open-mc-server-alert-manager
     tag: latest

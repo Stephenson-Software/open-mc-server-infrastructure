@@ -1,3 +1,4 @@
+{{- if .Values.alertManager.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -115,3 +116,4 @@ spec:
       name: http
   selector:
     {{- include "omcsi.selectorLabels" (dict "root" . "component" "alert-manager") | nindent 4 }}
+{{- end }}

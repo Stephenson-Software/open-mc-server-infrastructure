@@ -53,6 +53,7 @@ spec:
       path: /actuator/prometheus
       interval: {{ .Values.monitoring.serviceMonitor.interval | quote }}
       scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout | quote }}
+{{- if .Values.alertManager.enabled }}
 ---
 # ---------------------------------------------------------------------------
 # alert-manager – http port 8090
@@ -76,6 +77,8 @@ spec:
       path: /actuator/prometheus
       interval: {{ .Values.monitoring.serviceMonitor.interval | quote }}
       scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout | quote }}
+{{- end }}
+{{- if .Values.backupManager.enabled }}
 ---
 # ---------------------------------------------------------------------------
 # backup-manager – http port 8091
@@ -99,6 +102,7 @@ spec:
       path: /actuator/prometheus
       interval: {{ .Values.monitoring.serviceMonitor.interval | quote }}
       scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout | quote }}
+{{- end }}
 ---
 # ---------------------------------------------------------------------------
 # agent-manager – management port 8094 (only when agent-manager is enabled)
