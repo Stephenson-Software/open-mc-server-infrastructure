@@ -1,3 +1,4 @@
+{{- if .Values.backupManager.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -49,10 +50,12 @@ spec:
             {{- end }}
             - name: SOURCE_DIRECTORY
               value: {{ .Values.backupManager.env.SOURCE_DIRECTORY | default "/mcserver" | quote }}
+            # Both forced off when alertManager.enabled=false: there is nothing to
+            # deliver to, and every backup would otherwise log a failed POST.
             - name: ALERTS_BACKUP_SUCCESS
-              value: {{ .Values.backupManager.env.ALERTS_BACKUP_SUCCESS | quote }}
+              value: {{ if .Values.alertManager.enabled }}{{ .Values.backupManager.env.ALERTS_BACKUP_SUCCESS | quote }}{{ else }}"false"{{ end }}
             - name: ALERTS_BACKUP_FAILURE
-              value: {{ .Values.backupManager.env.ALERTS_BACKUP_FAILURE | quote }}
+              value: {{ if .Values.alertManager.enabled }}{{ .Values.backupManager.env.ALERTS_BACKUP_FAILURE | quote }}{{ else }}"false"{{ end }}
             - name: ALERT_MANAGER_URL
               value: "http://{{ include "omcsi.alertManagerHost" . }}:{{ .Values.alertManager.service.port }}/api/alerts"
           livenessProbe:
@@ -118,3 +121,4 @@ spec:
       name: http
   selector:
     {{- include "omcsi.selectorLabels" (dict "root" . "component" "backup-manager") | nindent 4 }}
+{{- end }}

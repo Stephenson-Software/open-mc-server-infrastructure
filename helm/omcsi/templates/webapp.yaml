@@ -117,9 +117,11 @@ spec:
               value: "/app/data"
             # Full alerts endpoint, matching minecraft-wrapper/backup-manager/agent-manager.
             - name: ALERT_MANAGER_URL
-              value: "http://{{ include "omcsi.alertManagerHost" . }}:{{ .Values.alertManager.service.port }}/api/alerts"
+              value: {{ if .Values.alertManager.enabled }}"http://{{ include "omcsi.alertManagerHost" . }}:{{ .Values.alertManager.service.port }}/api/alerts"{{ else }}""{{ end }}
+            # Follows alertManager.enabled: a disabled alert-manager cannot be
+            # enabled from the webapp's side.
             - name: ALERT_MANAGER_ENABLED
-              value: {{ .Values.webapp.env.ALERT_MANAGER_ENABLED | quote }}
+              value: {{ if .Values.alertManager.enabled }}{{ .Values.webapp.env.ALERT_MANAGER_ENABLED | quote }}{{ else }}"false"{{ end }}
             - name: MINECRAFT_WRAPPER_URL
               value: "http://{{ include "omcsi.minecraftWrapperHost" . }}-internal:{{ .Values.minecraftWrapper.internalService.wrapperPort }}"
             - name: ACCORDION_CHAT_URL
