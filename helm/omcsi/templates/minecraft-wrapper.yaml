@@ -11,12 +11,17 @@ spec:
   # semantics is the guarantee that needs. Replicas may only be 0 (asleep; a
   # hostname router such as itzg/mc-router can scale it back to 1 when a
   # player connects) or 1 — the template refuses anything else.
+  #
+  # serviceName is the EXTERNAL game Service, and this StatefulSet carries the
+  # same name as that Service. mc-router finds the StatefulSet to scale by the
+  # annotated Service's name and requires spec.serviceName to match it; bind
+  # this to the internal Service and wake-on-connect silently never fires.
   {{- $replicas := int .Values.minecraftWrapper.replicas }}
   {{- if or (lt $replicas 0) (gt $replicas 1) }}
   {{- fail "minecraftWrapper.replicas must be 0 or 1: a single Minecraft server instance must own the world data exclusively" }}
   {{- end }}
   replicas: {{ $replicas }}
-  serviceName: {{ include "omcsi.minecraftWrapperHost" . }}-internal
+  serviceName: {{ include "omcsi.minecraftWrapperHost" . }}
   selector:
     matchLabels:
       {{- include "omcsi.selectorLabels" (dict "root" . "component" "minecraft-wrapper") | nindent 6 }}
