@@ -18,12 +18,20 @@ tests:
           value: 1
         documentIndex: 0
 
-  - it: is headless-bound to the internal Service
+  - it: is named identically to its game Service and bound to it (what mc-router scales by)
     asserts:
       - equal:
-          path: spec.serviceName
-          value: RELEASE-NAME-omcsi-minecraft-wrapper-internal
+          path: metadata.name
+          value: RELEASE-NAME-omcsi-minecraft-wrapper
         documentIndex: 0
+      - equal:
+          path: spec.serviceName
+          value: RELEASE-NAME-omcsi-minecraft-wrapper
+        documentIndex: 0
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-omcsi-minecraft-wrapper
+        documentIndex: 1
 
   - it: can be put to sleep with replicas 0
     set:
