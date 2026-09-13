@@ -1,0 +1,103 @@
+suite: co-located values profile (values-colocated.yaml)
+templates:
+  - templates/minecraft-wrapper.yaml
+  - templates/webapp.yaml
+  - templates/nginx.yaml
+  - templates/nginx-configmap.yaml
+  - templates/alert-manager.yaml
+  - templates/backup-manager.yaml
+  - templates/ingress.yaml
+  - templates/pdb.yaml
+  - templates/pvc.yaml
+values:
+  - ../values-colocated.yaml
+set:
+  secrets.rconPassword: ci
+  secrets.adminPassword: ci
+  ingress.hosts:
+    - host: oak.example.com
+  minecraftWrapper.service.annotations:
+    mc-router.itzg.me/externalServerName: oak.example.com
+tests:
+  - it: wrapper is born asleep with the profile's sizing and heap
+    template: templates/minecraft-wrapper.yaml
+    asserts:
+      - equal:
+          path: spec.replicas
+          value: 0
+        documentIndex: 0
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 3.5Gi
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JAVA_OPTS
+            value: "-Xms1G -Xmx3G"
+        documentIndex: 0
+
+  - it: game Service is ClusterIP and carries the router annotation
+    template: templates/minecraft-wrapper.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+        documentIndex: 1
+      - equal:
+          path: metadata.annotations["mc-router.itzg.me/externalServerName"]
+          value: oak.example.com
+        documentIndex: 1
+
+  - it: webapp JVM is capped to fit its limit
+    template: templates/webapp.yaml
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].resources.limits.memory
+          value: 320Mi
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JAVA_TOOL_OPTIONS
+            value: "-Xmx160m -XX:+UseSerialGC"
+        documentIndex: 0
+
+  - it: nginx claims no address of its own
+    template: templates/nginx.yaml
+    asserts:
+      - equal:
+          path: spec.type
+          value: ClusterIP
+        documentIndex: 1
+
+  - it: leaves out alert-manager and backup-manager
+    templates: [templates/alert-manager.yaml, templates/backup-manager.yaml]
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: routes the dashboard by hostname
+    template: templates/ingress.yaml
+    asserts:
+      - hasDocuments:
+          count: 1
+      - equal:
+          path: spec.rules[0].host
+          value: oak.example.com
+
+  - it: renders no PodDisruptionBudgets on a single node
+    template: templates/pdb.yaml
+    asserts:
+      - hasDocuments:
+          count: 0
+
+  - it: keeps only the world and dashboard volumes, at the profile's world size
+    template: templates/pvc.yaml
+    asserts:
+      - hasDocuments:
+          count: 2
+      - equal:
+          path: spec.resources.requests.storage
+          value: 5Gi
+        documentIndex: 0
