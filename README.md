@@ -89,6 +89,14 @@ helm upgrade omcsi ./helm/omcsi --namespace omcsi \
 # Upgrade an existing release
 helm upgrade omcsi ./helm/omcsi --namespace omcsi --reuse-values
 
+# Upgrading a release installed from chart 0.1.x: the wrapper changed from a
+# Deployment to a StatefulSet in 0.2.0. Helm deletes the old object and creates
+# the new one, and on a single-node cluster both pods can briefly hold the same
+# world volume — two JVMs on one world. Stop the old pod first:
+kubectl -n omcsi scale deployment omcsi-minecraft-wrapper --replicas=0
+kubectl -n omcsi wait --for=delete pod -l app.kubernetes.io/component=minecraft-wrapper --timeout=120s
+helm upgrade omcsi ./helm/omcsi --namespace omcsi --reuse-values
+
 # Uninstall
 helm uninstall omcsi --namespace omcsi
 ```
@@ -109,6 +117,7 @@ The chart exposes most application-level `sample.env` variables through `values.
 
 **Key design notes:**
 - `secrets.rconPassword` and `secrets.adminPassword` are **required** — the chart will refuse to install without them
+- The Minecraft wrapper is a `StatefulSet` with exactly 0 or 1 replicas — it owns a `ReadWriteOnce` world volume, and 0 means asleep (see "Co-locating servers")
 - World data and service data persist across pod restarts via `PersistentVolumeClaim` resources
 - Sensitive values (passwords, tokens, API keys) are stored in a Kubernetes `Secret`
 - Internal service discovery uses Kubernetes `Service` DNS names (e.g., `omcsi-minecraft-wrapper`, `omcsi-alert-manager`)
@@ -1338,8 +1347,30 @@ claiming 25565 so something else can hold it. Set
 `minecraftWrapper.service.type: ClusterIP` and point the proxy at the resulting
 Service.
 
-Two things to know before going that way, because both are easy to discover
-late:
+The simplest proxy for this is [itzg/mc-router](https://github.com/itzg/mc-router).
+It forwards the raw connection without any forwarding mode, so the backend keeps
+authenticating players itself in `online-mode=true` and neither of the caveats
+below applies. Run it with `--in-kube-cluster` and it discovers backends from an
+annotation on the game Service:
+
+```yaml
+minecraftWrapper:
+  service:
+    type: ClusterIP
+    annotations:
+      mc-router.itzg.me/externalServerName: oak.example.com
+```
+
+It can also put an idle server to sleep and wake it on the next connection
+(`--auto-scale-up` / `--auto-scale-down`), which is what makes several servers
+on one node affordable — an empty server then costs its volume and nothing
+else. The wrapper is a StatefulSet, which is what mc-router scales; a release
+meant to be born asleep sets `minecraftWrapper.replicas: 0` and mc-router
+scales it to 1 when the first player connects. Nothing else about the chart
+changes for that.
+
+Two things to know before going the Velocity/BungeeCord way instead, because
+both are easy to discover late:
 
 - Spigot supports **BungeeCord-style** forwarding (`settings.bungeecord: true`
   in `spigot.yml`). Velocity's modern forwarding requires Paper, which is not
