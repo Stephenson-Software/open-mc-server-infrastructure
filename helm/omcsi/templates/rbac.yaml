@@ -128,3 +128,53 @@ subjects:
     namespace: {{ .Release.Namespace }}
 {{- end }}
 {{- end }}
+{{- if .Values.webapp.sleepAware.enabled }}
+---
+# The dashboard's own identity when it runs sleep-aware (webapp.sleepAware.enabled).
+# Independent of rbac.enabled above: those are credentials for people, this one is
+# for a pod, and it is the smallest grant that lets the dashboard tell a sleeping
+# wrapper from a crashed one and wake it — read the wrapper StatefulSet and its
+# scale subresource, patch the scale, and nothing else in the namespace. The
+# resourceNames pin means a compromised dashboard could scale this release's
+# wrapper and no other object.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "omcsi.fullname" . }}-webapp
+  labels:
+    {{- include "omcsi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "omcsi.fullname" . }}-webapp
+  labels:
+    {{- include "omcsi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+rules:
+  - apiGroups: [apps]
+    resources: [statefulsets]
+    resourceNames: [{{ include "omcsi.fullname" . }}-minecraft-wrapper]
+    verbs: [get]
+  - apiGroups: [apps]
+    resources: [statefulsets/scale]
+    resourceNames: [{{ include "omcsi.fullname" . }}-minecraft-wrapper]
+    verbs: [get, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "omcsi.fullname" . }}-webapp
+  labels:
+    {{- include "omcsi.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "omcsi.fullname" . }}-webapp
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "omcsi.fullname" . }}-webapp
+    namespace: {{ .Release.Namespace }}
+{{- end }}

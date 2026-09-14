@@ -131,3 +131,89 @@ tests:
       rbac.operator.enabled: true
     asserts:
       - notFailedTemplate: {}
+
+  # ---------------------------------------------------------------------------
+  # The dashboard's own ServiceAccount (webapp.sleepAware.enabled). Gated on
+  # its own, not on rbac.enabled: one is for a pod, the other for people.
+  # ---------------------------------------------------------------------------
+  - it: renders the webapp trio when sleep-aware, without rbac.enabled
+    set:
+      webapp.sleepAware.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 3
+      - isKind:
+          of: ServiceAccount
+        documentIndex: 0
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-omcsi-webapp
+        documentIndex: 0
+      - isKind:
+          of: Role
+        documentIndex: 1
+      - isKind:
+          of: RoleBinding
+        documentIndex: 2
+
+  - it: renders both the viewer and the webapp trios when both are enabled
+    set:
+      rbac.enabled: true
+      webapp.sleepAware.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 6
+      - equal:
+          path: metadata.name
+          value: RELEASE-NAME-omcsi-webapp
+        documentIndex: 3
+
+  - it: the webapp Role is pinned to the wrapper StatefulSet by name
+    # get on the StatefulSet, get/patch on its scale subresource, and nothing
+    # else: a compromised dashboard can scale this release's wrapper, not the
+    # namespace.
+    set:
+      webapp.sleepAware.enabled: true
+    documentIndex: 1
+    asserts:
+      - lengthEqual:
+          path: rules
+          count: 2
+      - contains:
+          path: rules
+          content:
+            apiGroups: [apps]
+            resources: [statefulsets]
+            resourceNames: [RELEASE-NAME-omcsi-minecraft-wrapper]
+            verbs: [get]
+      - contains:
+          path: rules
+          content:
+            apiGroups: [apps]
+            resources: [statefulsets/scale]
+            resourceNames: [RELEASE-NAME-omcsi-minecraft-wrapper]
+            verbs: [get, patch]
+      - notContains:
+          path: rules
+          content:
+            apiGroups: [""]
+            resources: [secrets]
+            verbs: [get, list, watch]
+
+  - it: binds the webapp ServiceAccount in the release namespace
+    set:
+      webapp.sleepAware.enabled: true
+    documentIndex: 2
+    asserts:
+      - equal:
+          path: roleRef.name
+          value: RELEASE-NAME-omcsi-webapp
+      - equal:
+          path: subjects[0].kind
+          value: ServiceAccount
+      - equal:
+          path: subjects[0].name
+          value: RELEASE-NAME-omcsi-webapp
+      - equal:
+          path: subjects[0].namespace
+          value: NAMESPACE
