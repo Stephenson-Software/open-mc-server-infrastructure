@@ -1,0 +1,98 @@
+# =============================================================================
+# Open Minecraft Server Infrastructure – values profile for a co-located release
+# =============================================================================
+# Apply on top of values.yaml when several releases share one node:
+#
+#   helm install oak ./helm/omcsi -n oak --create-namespace \
+#     -f helm/omcsi/values-colocated.yaml \
+#     --set "ingress.hosts[0].host=oak.example.com" \
+#     --set "minecraftWrapper.service.annotations.mc-router\.itzg\.me/externalServerName=oak.example.com" \
+#     --set secrets.rconPassword=... --set secrets.adminPassword=...
+#
+# The chart's defaults assume a machine per server (4Gi request, 8Gi limit,
+# -Xmx6G). Everything here is the set of correlated edits the README's
+# "Co-locating servers" section describes, kept in one file so they move
+# together — the memory limit and -Xmx in particular, because a heap larger
+# than the limit is an OOMKill under load rather than a garbage collection.
+#
+# The numbers are a starting point for a small survival server with a handful
+# of players and are expected to be revised from measurement. Change them here,
+# not by overriding one of them on the command line.
+# =============================================================================
+
+minecraftWrapper:
+  # Born asleep. A hostname router that watches the Service annotation below
+  # (itzg/mc-router with --auto-scale-up) scales this to 1 when the first
+  # player connects. Set to 1 for a co-located release that should simply
+  # always run.
+  replicas: 0
+  resources:
+    requests:
+      cpu: "500m"
+      memory: 2Gi
+    limits:
+      cpu: "2"
+      memory: 3.5Gi
+  service:
+    # The router holds 25565; this release must not claim a port of its own.
+    type: ClusterIP
+    # Supply per release:
+    #   mc-router.itzg.me/externalServerName: <hostname>
+    annotations: {}
+  env:
+    # 3G heap under a 3.5Gi limit. Move these together.
+    JAVA_OPTS: "-Xms1G -Xmx3G"
+    MAX_PLAYERS: "10"
+
+webapp:
+  resources:
+    requests:
+      cpu: "50m"
+      memory: 160Mi
+    limits:
+      cpu: "300m"
+      memory: 320Mi
+  env:
+    # Cap the dashboard JVM so it fits the limit above; without this the JVM
+    # sizes its heap from the node, not the container.
+    JAVA_TOOL_OPTIONS: "-Xmx160m -XX:+UseSerialGC"
+
+nginx:
+  resources:
+    requests:
+      cpu: "25m"
+      memory: 32Mi
+    limits:
+      cpu: "200m"
+      memory: 64Mi
+  service:
+    # Reached through the Ingress; no address of its own.
+    type: ClusterIP
+
+# One platform-level backup job over every release's mcserver PVC, and one
+# place that aggregates alerts, rather than a copy of each per release.
+backupManager:
+  enabled: false
+alertManager:
+  enabled: false
+
+ingress:
+  enabled: true
+  # Supply per release:
+  #   hosts:
+  #     - host: <hostname>
+  #   tls:
+  #     - hosts: [<hostname>]
+  #       secretName: <release>-tls
+  # and the cert-manager annotation if it issues the certificate.
+
+# A single node cannot satisfy minAvailable: 1 during a drain.
+podDisruptionBudgets:
+  enabled: false
+
+persistence:
+  mcserver:
+    size: 5Gi
+  # No backup-manager, no backups PVC.
+  backups:
+    enabled: false

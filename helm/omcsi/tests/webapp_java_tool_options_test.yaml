@@ -1,0 +1,26 @@
+suite: webapp JAVA_TOOL_OPTIONS
+templates:
+  - templates/webapp.yaml
+set:
+  secrets.rconPassword: ci
+  secrets.adminPassword: ci
+tests:
+  - it: is absent by default so the JVM sizes itself
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JAVA_TOOL_OPTIONS
+          any: true
+        documentIndex: 0
+
+  - it: is rendered when set
+    set:
+      webapp.env.JAVA_TOOL_OPTIONS: "-Xmx160m"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: JAVA_TOOL_OPTIONS
+            value: "-Xmx160m"
+        documentIndex: 0
