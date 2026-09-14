@@ -308,6 +308,36 @@
             animation: toastIn 0.25s ease-out;
         }
 
+        /* Server state line in the Server Control card. Mirrors the public page's
+           indicator; asleep/waking only occur on sleep-aware Kubernetes deployments. */
+        .server-state {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 15px;
+            color: var(--text-muted);
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .status-online { background-color: #22c55e; box-shadow: 0 0 8px rgba(34, 197, 94, 0.5); }
+        .status-offline { background-color: #ef4444; box-shadow: 0 0 8px rgba(239, 68, 68, 0.5); }
+        .status-asleep { background-color: #60a5fa; box-shadow: 0 0 8px rgba(96, 165, 250, 0.5); }
+        .status-waking {
+            background-color: #f59e0b;
+            box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+            animation: status-pulse 1.2s ease-in-out infinite;
+        }
+        .status-unknown { background-color: #9ca3af; }
+        @keyframes status-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.35; }
+        }
+
         .toast.success { background: #10b981; }
         .toast.error { background: #ef4444; }
         .toast.info { background: #3b82f6; }
@@ -431,6 +461,10 @@
         <div class="card">
             <h2>Server Control</h2>
             <p style="color: var(--text-muted); margin-bottom: 15px;">Start, stop, or restart the Minecraft server</p>
+            <div class="server-state" role="status" aria-live="polite">
+                <span class="status-indicator status-unknown" id="serverStateIndicator" aria-hidden="true"></span>
+                <span id="serverStateText">Checking server state…</span>
+            </div>
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                 <button type="button" id="btnStartServer" onclick="startServer()"
                         class="btn btn-primary" style="background: #10b981;"
@@ -868,6 +902,42 @@
             return div.innerHTML.replace(/"/g, '&quot;');
         }
         
+        // Server state line. /api/status is public, so no credentials are needed.
+        // serverState is ONLINE/OFFLINE everywhere; ASLEEP/WAKING only appear when
+        // the dashboard is sleep-aware (a wrapper scaled to zero on Kubernetes).
+        const SERVER_STATE_TEXT = {
+            ONLINE: 'Online',
+            OFFLINE: 'Offline',
+            ASLEEP: 'Asleep — join to wake, or press Start',
+            WAKING: 'Waking up — the server is starting'
+        };
+        let serverStateTimer = null;
+
+        async function refreshServerState() {
+            const indicator = document.getElementById('serverStateIndicator');
+            const text = document.getElementById('serverStateText');
+            if (!indicator || !text) return;
+            let state = 'UNKNOWN';
+            try {
+                const response = await fetch('/api/status');
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const status = await response.json();
+                state = status.serverState || (status.online ? 'ONLINE' : 'OFFLINE');
+                text.textContent = status.serverStateMessage && state !== 'ONLINE' && state !== 'OFFLINE'
+                    ? status.serverStateMessage
+                    : (SERVER_STATE_TEXT[state] || state);
+            } catch (error) {
+                text.textContent = 'Server state unavailable';
+            }
+            indicator.className = 'status-indicator status-' + state.toLowerCase();
+            // Poll faster while the server is coming up so the line flips to Online
+            // without a reload; otherwise a lazy refresh is enough.
+            clearTimeout(serverStateTimer);
+            serverStateTimer = setTimeout(refreshServerState, state === 'WAKING' ? 5000 : 30000);
+        }
+
+        document.addEventListener('DOMContentLoaded', refreshServerState);
+
         // Lock all server-control buttons while any one is in flight so a user
         // can't click Stop and Restart concurrently and confuse the wrapper.
         function setServerControlsBusy(busy) {
@@ -912,6 +982,7 @@
                 output.textContent = '✗ Error: ' + error.message;
             } finally {
                 setServerControlsBusy(false);
+                refreshServerState();
             }
         }
         
@@ -947,6 +1018,7 @@
                 output.textContent = '✗ Error: ' + error.message;
             } finally {
                 setServerControlsBusy(false);
+                refreshServerState();
             }
         }
         
@@ -982,6 +1054,7 @@
                 output.textContent = '✗ Error: ' + error.message;
             } finally {
                 setServerControlsBusy(false);
+                refreshServerState();
             }
         }
     </script>

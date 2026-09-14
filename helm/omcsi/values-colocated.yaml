@@ -56,6 +56,12 @@ webapp:
     # Cap the dashboard JVM so it fits the limit above; without this the JVM
     # sizes its heap from the node, not the container.
     JAVA_TOOL_OPTIONS: "-Xmx160m -XX:+UseSerialGC"
+  # The wrapper above is born asleep, so the dashboard must not wait for it
+  # (or `helm --wait` never finishes) and must show a scaled-to-zero wrapper as
+  # asleep rather than crashed. Grants the dashboard get/patch on the wrapper
+  # StatefulSet's scale subresource so its Start button can wake it.
+  sleepAware:
+    enabled: true
 
 nginx:
   resources:

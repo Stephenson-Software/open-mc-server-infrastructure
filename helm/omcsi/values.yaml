@@ -198,6 +198,29 @@ webapp:
     # JVM flags for the dashboard, e.g. "-Xmx160m" to fit a small memory limit
     # when several releases share a node. Empty means the JVM sizes itself.
     JAVA_TOOL_OPTIONS: ""
+  # Sleep-aware dashboard. For a release whose wrapper rests at 0 replicas
+  # (minecraftWrapper.replicas: 0, woken by a hostname router — see
+  # "Co-locating servers" in README.md) a sleeping wrapper is normal, and the
+  # dashboard has to know that or it shows the resting server as crashed and
+  # its wait-for-wrapper init container never lets it start at all.
+  #
+  # When enabled:
+  #   - the wait-for-wrapper init container is left out, so the dashboard (and
+  #     nginx, whose readiness depends on it) comes up while the wrapper sleeps;
+  #   - a ServiceAccount is created for the dashboard, bound to a Role that can
+  #     `get` the wrapper's StatefulSet and `get`/`patch` its scale subresource —
+  #     that one object only, by name — and mounted into the pod;
+  #   - the dashboard reads the replica count through the Kubernetes API: 0 shows
+  #     as "Asleep" on both pages, and the admin Start button scales it to 1
+  #     (the wrapper's own MINECRAFT_AUTO_START then brings the game up);
+  #   - the webapp NetworkPolicy gains an egress rule to the API server (see
+  #     networkPolicy.kubeApiServerCIDR / kubeApiServerPort).
+  #
+  # Off by default: a single-server deployment sees no difference, and the
+  # dashboard pod then mounts no ServiceAccount token at all. Kubernetes-only —
+  # Compose has no notion of scaling to zero, so the flag does not exist there.
+  sleepAware:
+    enabled: false
   # webapp mounts the mcserver and webapp-data PVCs directly. Scaling beyond
   # 1 replica requires persistence.mcserver.accessMode AND
   # persistence.webappData.accessMode to both be ReadWriteMany (see the
@@ -474,6 +497,15 @@ networkPolicy:
   dnsPodSelector:
     matchLabels:
       k8s-app: kube-dns
+  # Where the Kubernetes API server is reached from a pod, used only by the
+  # webapp egress rule that webapp.sleepAware.enabled adds. The `kubernetes`
+  # Service is a ClusterIP that is DNATed to the control plane's real address,
+  # and most CNIs evaluate egress policy after that translation, so the rule
+  # names the API server's own port (6443 on kubeadm and most distributions;
+  # 443 is allowed as well for managed control planes) and a CIDR for its
+  # address. Narrow the CIDR to the control-plane node(s) for tighter control.
+  kubeApiServerCIDR: "0.0.0.0/0"
+  kubeApiServerPort: 6443
 
 # ---------------------------------------------------------------------------
 # PodDisruptionBudgets

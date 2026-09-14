@@ -32,6 +32,19 @@ spec:
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if .Values.webapp.sleepAware.enabled }}
+      # The token is what lets the dashboard read and patch the wrapper
+      # StatefulSet's scale; the Role bound to this account grants nothing else.
+      serviceAccountName: {{ include "omcsi.fullname" . }}-webapp
+      automountServiceAccountToken: true
+      {{- else }}
+      # The dashboard has no business with the Kubernetes API unless it is
+      # sleep-aware, so do not hand it the namespace's default token.
+      automountServiceAccountToken: false
+      {{- end }}
+      {{- if not .Values.webapp.sleepAware.enabled }}
+      # Sleep-aware releases skip this: their wrapper rests at 0 replicas, so
+      # waiting for it would block the dashboard (and nginx behind it) forever.
       initContainers:
         - name: wait-for-wrapper
           image: busybox:1.36
@@ -57,6 +70,7 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+      {{- end }}
       containers:
         - name: webapp
           image: "{{ .Values.webapp.image.repository }}:{{ .Values.webapp.image.tag }}"
@@ -128,6 +142,14 @@ spec:
               value: {{ .Values.webapp.env.ACCORDION_CHAT_URL | quote }}
             - name: MINECRAFT_WRAPPER_ENABLED
               value: {{ .Values.webapp.env.MINECRAFT_WRAPPER_ENABLED | quote }}
+            {{- if .Values.webapp.sleepAware.enabled }}
+            # Read through the Kubernetes API with the mounted ServiceAccount token:
+            # 0 replicas is shown as "Asleep", and the admin Start action scales to 1.
+            - name: SLEEP_AWARE_ENABLED
+              value: "true"
+            - name: WRAPPER_STATEFULSET_NAME
+              value: {{ include "omcsi.fullname" . }}-minecraft-wrapper
+            {{- end }}
             - name: WORLD_DIRECTORY
               value: {{ .Values.webapp.env.WORLD_DIRECTORY | quote }}
             - name: MAX_FILE_UPLOAD_SIZE

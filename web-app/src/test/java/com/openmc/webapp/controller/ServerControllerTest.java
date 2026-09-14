@@ -5,7 +5,9 @@ import com.openmc.webapp.service.ActivityTrackerService;
 import com.openmc.webapp.service.AlertNotificationService;
 import com.openmc.webapp.service.MinecraftWrapperService.WrapperResult;
 import com.openmc.webapp.service.PluginService;
+import com.openmc.webapp.model.ServerState;
 import com.openmc.webapp.service.RconService;
+import com.openmc.webapp.service.ServerStateService;
 import com.openmc.webapp.service.WorldService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,8 +24,10 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -67,6 +71,9 @@ class ServerControllerTest {
     @MockBean
     private com.openmc.webapp.service.DeploymentHistoryService deploymentHistoryService;
 
+    @MockBean
+    private ServerStateService serverStateService;
+
     private RconService.ServerStatus mockStatus;
 
     @BeforeEach
@@ -81,6 +88,10 @@ class ServerControllerTest {
         when(serverConfig.getAdminUsername()).thenReturn("admin");
         when(serverConfig.getAdminPassword()).thenReturn("admin");
         when(activityTrackerService.isEnabled()).thenReturn(false);
+        // Not sleep-aware unless a test says otherwise: the RCON flag passes straight through.
+        when(serverStateService.resolve(anyBoolean()))
+                .thenAnswer(invocation -> (boolean) invocation.getArgument(0) ? ServerState.ONLINE : ServerState.OFFLINE);
+        when(serverStateService.wakeIfAsleep()).thenReturn(Optional.empty());
     }
 
     @Test
@@ -119,7 +130,71 @@ class ServerControllerTest {
 
         mockMvc.perform(get("/api/status"))
                 .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON));
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                // the RCON fields stay at the top level for existing consumers
+                .andExpect(jsonPath("$.online").value(true))
+                .andExpect(jsonPath("$.resourceUsage.tps").value("20.0, 20.0, 20.0"))
+                .andExpect(jsonPath("$.serverState").value("ONLINE"));
+    }
+
+    /** What RconService produces when nothing answers on the RCON port. */
+    private RconService.ServerStatus unreachableStatus() {
+        RconService.ResourceUsage usage = new RconService.ResourceUsage("N/A", "N/A", "N/A", "N/A", 0.0);
+        return new RconService.ServerStatus(serverConfig, "Error: Unable to connect to server - Connection refused", usage);
+    }
+
+    @Test
+    @DisplayName("Should report ASLEEP on GET /api/status when the wrapper is scaled to zero")
+    void shouldReportAsleepOnGetApiStatus() throws Exception {
+        RconService.ServerStatus unreachable = unreachableStatus();
+        when(rconService.getServerStatus()).thenReturn(unreachable);
+        when(serverStateService.resolve(false)).thenReturn(ServerState.ASLEEP);
+
+        mockMvc.perform(get("/api/status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.online").value(false))
+                .andExpect(jsonPath("$.serverState").value("ASLEEP"))
+                .andExpect(jsonPath("$.serverStateMessage").value(containsString("join to wake")));
+    }
+
+    @Test
+    @DisplayName("Should render the public page as asleep rather than as an error")
+    void shouldRenderPublicPageAsleep() throws Exception {
+        RconService.ServerStatus unreachable = unreachableStatus();
+        when(rconService.getServerStatus()).thenReturn(unreachable);
+        when(serverStateService.resolve(false)).thenReturn(ServerState.ASLEEP);
+
+        mockMvc.perform(get("/public"))
+                .andExpect(status().isOk())
+                .andExpect(model().attribute("serverState", ServerState.ASLEEP))
+                .andExpect(content().string(containsString("status-asleep")))
+                .andExpect(content().string(containsString("join to wake")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("Unable to connect to server"))));
+    }
+
+    @Test
+    @DisplayName("Should render the public page as waking while the wrapper comes up")
+    void shouldRenderPublicPageWaking() throws Exception {
+        RconService.ServerStatus unreachable = unreachableStatus();
+        when(rconService.getServerStatus()).thenReturn(unreachable);
+        when(serverStateService.resolve(false)).thenReturn(ServerState.WAKING);
+
+        mockMvc.perform(get("/public"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("status-waking")))
+                .andExpect(content().string(containsString("The server is starting")));
+    }
+
+    @Test
+    @DisplayName("Should render the public page offline when the wrapper is genuinely down")
+    void shouldRenderPublicPageOffline() throws Exception {
+        RconService.ServerStatus unreachable = unreachableStatus();
+        when(rconService.getServerStatus()).thenReturn(unreachable);
+
+        mockMvc.perform(get("/public"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("status-offline")))
+                .andExpect(content().string(containsString("Unable to connect to server")));
     }
 
     @Test
@@ -417,6 +492,53 @@ class ServerControllerTest {
 
         // A rejected start is not an event worth alerting on
         verify(alertNotificationService, never()).sendInfoAlert(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Should wake a sleeping wrapper on start instead of calling its start endpoint")
+    void shouldWakeSleepingWrapperOnStart() throws Exception {
+        when(serverStateService.wakeIfAsleep())
+                .thenReturn(Optional.of(WrapperResult.success("Server is waking up")));
+
+        mockMvc.perform(post("/api/server/start")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"admin\",\"password\":\"admin\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Server is waking up"));
+
+        verify(minecraftWrapperService, never()).startServer();
+        verify(alertNotificationService, times(1)).sendInfoAlert(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Should surface a failed wake without falling through to the wrapper")
+    void shouldSurfaceFailedWake() throws Exception {
+        when(serverStateService.wakeIfAsleep())
+                .thenReturn(Optional.of(WrapperResult.failure("Could not wake the server")));
+
+        mockMvc.perform(post("/api/server/start")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"admin\",\"password\":\"admin\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.message").value("Could not wake the server"));
+
+        verify(minecraftWrapperService, never()).startServer();
+        verify(alertNotificationService, never()).sendInfoAlert(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Should not consult the wake path before credentials are validated")
+    void shouldNotWakeWithBadCredentials() throws Exception {
+        mockMvc.perform(post("/api/server/start")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"wrong\",\"password\":\"wrong\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(false));
+
+        verify(serverStateService, never()).wakeIfAsleep();
+        verify(minecraftWrapperService, never()).startServer();
     }
 
     @Test

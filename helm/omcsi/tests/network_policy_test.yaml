@@ -192,3 +192,84 @@ tests:
                     app.kubernetes.io/name: omcsi
                     app.kubernetes.io/instance: RELEASE-NAME
                     app.kubernetes.io/component: minecraft-wrapper
+
+  # ---------------------------------------------------------------------------
+  # Sleep-aware webapp (webapp.sleepAware.enabled): the dashboard talks to the
+  # Kubernetes API, and only then.
+  # ---------------------------------------------------------------------------
+  - it: webapp policy has no API-server egress by default
+    documentIndex: 1
+    asserts:
+      - notContains:
+          path: spec.egress
+          content:
+            ports:
+              - port: 443
+                protocol: TCP
+              - port: 6443
+                protocol: TCP
+            to:
+              - ipBlock:
+                  cidr: 0.0.0.0/0
+      # the wrapper, alert-manager and DNS rules are all that is there
+      - lengthEqual:
+          path: spec.egress
+          count: 3
+
+  - it: webapp policy allows egress to the Kubernetes API when sleep-aware
+    set:
+      webapp.sleepAware.enabled: true
+    documentIndex: 1
+    asserts:
+      - lengthEqual:
+          path: spec.egress
+          count: 4
+      - contains:
+          path: spec.egress
+          content:
+            ports:
+              - port: 443
+                protocol: TCP
+              - port: 6443
+                protocol: TCP
+            to:
+              - ipBlock:
+                  cidr: 0.0.0.0/0
+
+  - it: API-server egress honours a narrowed CIDR and a different port
+    set:
+      webapp.sleepAware.enabled: true
+      networkPolicy.kubeApiServerCIDR: 10.0.0.2/32
+      networkPolicy.kubeApiServerPort: 16443
+    documentIndex: 1
+    asserts:
+      - contains:
+          path: spec.egress
+          content:
+            ports:
+              - port: 443
+                protocol: TCP
+              - port: 16443
+                protocol: TCP
+            to:
+              - ipBlock:
+                  cidr: 10.0.0.2/32
+
+  - it: sleep-aware egress does not touch the other policies
+    set:
+      webapp.sleepAware.enabled: true
+    asserts:
+      - hasDocuments:
+          count: 5
+      - notContains:
+          path: spec.egress
+          content:
+            ports:
+              - port: 443
+                protocol: TCP
+              - port: 6443
+                protocol: TCP
+            to:
+              - ipBlock:
+                  cidr: 0.0.0.0/0
+        documentIndex: 0

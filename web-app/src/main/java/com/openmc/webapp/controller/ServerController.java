@@ -1,6 +1,7 @@
 package com.openmc.webapp.controller;
 
 import com.openmc.webapp.config.ServerConfig;
+import com.openmc.webapp.dto.DashboardStatus;
 import com.openmc.webapp.dto.PluginDeleteRequest;
 import com.openmc.webapp.dto.PluginListRequest;
 import com.openmc.webapp.dto.PluginListResponse;
@@ -12,11 +13,13 @@ import com.openmc.webapp.dto.WorldOperationResponse;
 import com.openmc.webapp.model.ActivityTrackerStats;
 import com.openmc.webapp.model.DeploymentRecord;
 import com.openmc.webapp.model.LeaderboardEntry;
+import com.openmc.webapp.model.ServerState;
 import com.openmc.webapp.service.ActivityTrackerService;
 import com.openmc.webapp.service.AlertNotificationService;
 import com.openmc.webapp.service.DeploymentHistoryService;
 import com.openmc.webapp.service.PluginService;
 import com.openmc.webapp.service.RconService;
+import com.openmc.webapp.service.ServerStateService;
 import com.openmc.webapp.service.WorldService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,6 +55,7 @@ public class ServerController {
     private final AlertNotificationService alertNotificationService;
     private final com.openmc.webapp.service.MinecraftWrapperService minecraftWrapperService;
     private final DeploymentHistoryService deploymentHistoryService;
+    private final ServerStateService serverStateService;
 
     @org.springframework.beans.factory.annotation.Value("${deployment.auth.token:}")
     private String deploymentAuthToken;
@@ -67,7 +71,8 @@ public class ServerController {
                           WorldService worldService,
                           AlertNotificationService alertNotificationService,
                           com.openmc.webapp.service.MinecraftWrapperService minecraftWrapperService,
-                          DeploymentHistoryService deploymentHistoryService) {
+                          DeploymentHistoryService deploymentHistoryService,
+                          ServerStateService serverStateService) {
         this.rconService = rconService;
         this.serverConfig = serverConfig;
         this.activityTrackerService = activityTrackerService;
@@ -76,6 +81,7 @@ public class ServerController {
         this.alertNotificationService = alertNotificationService;
         this.minecraftWrapperService = minecraftWrapperService;
         this.deploymentHistoryService = deploymentHistoryService;
+        this.serverStateService = serverStateService;
     }
     
     /**
@@ -103,6 +109,7 @@ public class ServerController {
     public String publicPage(Model model) {
         RconService.ServerStatus status = rconService.getServerStatus();
         model.addAttribute("status", status);
+        model.addAttribute("serverState", resolveState(status));
         model.addAttribute("refreshIntervalMs", serverConfig.getRefreshIntervalMs());
         model.addAttribute("lastFetchTime", rconService.getLastFetchTime());
         model.addAttribute("activityTrackerEnabled", activityTrackerService.isEnabled());
@@ -156,8 +163,18 @@ public class ServerController {
     
     @GetMapping("/api/status")
     @ResponseBody
-    public RconService.ServerStatus getStatus() {
-        return rconService.getServerStatus();
+    public DashboardStatus getStatus() {
+        RconService.ServerStatus status = rconService.getServerStatus();
+        return new DashboardStatus(status, resolveState(status));
+    }
+
+    /**
+     * The state shown on the dashboard: the RCON online flag, refined by the wrapper
+     * StatefulSet's replica count when the dashboard is sleep-aware.
+     */
+    private ServerState resolveState(RconService.ServerStatus status) {
+        boolean online = status != null && status.isOnline();
+        return serverStateService.resolve(online);
     }
     
     @GetMapping("/api/resources")
@@ -429,7 +446,10 @@ public class ServerController {
             return Map.of("success", false, "message", "Invalid username or password");
         }
         
-        var result = minecraftWrapperService.startServer();
+        // A sleeping wrapper (StatefulSet at 0 replicas) is woken by scaling it up; the
+        // wrapper's own auto-start then brings the game up. Anything else goes to the
+        // wrapper's start endpoint as before.
+        var result = serverStateService.wakeIfAsleep().orElseGet(minecraftWrapperService::startServer);
 
         if (result.success()) {
             alertNotificationService.sendInfoAlert(
