@@ -124,6 +124,7 @@ The chart exposes most application-level `sample.env` variables through `values.
 - The Minecraft game port is exposed via a configurable Service (default `NodePort`); RCON, BlueMap, and the wrapper API are on a separate internal `ClusterIP` Service
 - The nginx config is managed via a `ConfigMap` and points to the webapp service automatically
 - The agent-manager is disabled by default and can be enabled via `agentManager.enabled=true`
+- The backup-manager and alert-manager are enabled by default and can be left out with `backupManager.enabled=false` / `alertManager.enabled=false` — useful when several releases share a node (see "Co-locating servers"). With the alert-manager off, the wrapper, webapp and backup-manager get an empty `ALERT_MANAGER_URL` and their alerts switched off, so nothing POSTs to a service that is not there
 - Pods sharing the mcserver PVC use pod affinity to prefer co-locating on the same node (recommended for `ReadWriteOnce` volumes)
 - The backup-manager uses `tar` directly on the mounted `/mcserver` PVC — no Docker socket or Docker CLI required; scheduled backups are enabled by default
 
@@ -1391,6 +1392,13 @@ the limit is an OOMKill under load rather than a garbage collection.
 
 Each release also keeps its own PersistentVolumeClaims, so disk adds up in the
 same way. On a single-node cluster using `local-path`, that is all one disk.
+
+The supporting services add up too: at the chart's defaults each release
+carries a webapp, nginx, backup-manager and alert-manager before the Minecraft
+process starts. On a shared node the last two are usually better done once for
+the whole machine — one backup job over every release's `mcserver` PVC, one
+place that aggregates alerts — and each can be left out of a release with
+`backupManager.enabled: false` and `alertManager.enabled: false`.
 
 ## Security Notes
 
