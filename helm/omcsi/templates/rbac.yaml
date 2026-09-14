@@ -99,7 +99,7 @@ rules:
     resources: [deployments, replicasets, statefulsets]
     verbs: [get, list, watch, create, update, patch, delete]
   - apiGroups: [apps]
-    resources: [deployments/scale]
+    resources: [deployments/scale, statefulsets/scale]
     verbs: [get, update, patch]
   - apiGroups: [policy]
     resources: [poddisruptionbudgets]
