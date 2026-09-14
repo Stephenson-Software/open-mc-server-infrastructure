@@ -62,11 +62,13 @@ public class KubernetesStatefulSetScaleClient implements StatefulSetScaleClient 
             ResponseEntity<Scale> response = restTemplate.exchange(
                     scaleUrl, HttpMethod.GET, new HttpEntity<>(authHeaders()), Scale.class);
             Scale scale = response.getBody();
-            if (scale == null || scale.spec() == null || scale.spec().replicas() == null) {
-                log.warn("Kubernetes returned a scale object without spec.replicas for {}", scaleUrl);
+            if (scale == null || scale.spec() == null) {
+                log.warn("Kubernetes returned a scale object without spec for {}", scaleUrl);
                 return OptionalInt.empty();
             }
-            return OptionalInt.of(scale.spec().replicas());
+            // The API serialises replicas with omitempty: a StatefulSet scaled to
+            // zero comes back as "spec": {}. Absent means zero, not unreadable.
+            return OptionalInt.of(scale.spec().replicas() == null ? 0 : scale.spec().replicas());
         } catch (RestClientException e) {
             log.debug("Failed to read StatefulSet scale from {}: {}", scaleUrl, e.getMessage());
             return OptionalInt.empty();

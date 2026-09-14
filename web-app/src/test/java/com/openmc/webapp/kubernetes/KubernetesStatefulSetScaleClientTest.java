@@ -61,6 +61,19 @@ class KubernetesStatefulSetScaleClientTest {
     }
 
     @Test
+    @DisplayName("an empty spec — how the API serialises zero replicas — reads as 0, not as unreadable")
+    void emptySpecIsZero() {
+        server.expect(requestTo(SCALE_URL))
+                .andRespond(withSuccess(
+                        "{\"kind\":\"Scale\",\"apiVersion\":\"autoscaling/v1\","
+                                + "\"metadata\":{\"name\":\"oak-omcsi-minecraft-wrapper\"},"
+                                + "\"spec\":{},\"status\":{\"replicas\":0,\"selector\":\"x\"}}",
+                        MediaType.APPLICATION_JSON));
+
+        assertEquals(OptionalInt.of(0), client.getReplicas());
+    }
+
+    @Test
     @DisplayName("a forbidden read is empty rather than an exception")
     void forbiddenReadIsEmpty() {
         server.expect(requestTo(SCALE_URL))
