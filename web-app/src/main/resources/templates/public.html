@@ -227,6 +227,23 @@
             box-shadow: 0 0 8px rgba(239, 68, 68, 0.5);
         }
         
+        /* A wrapper scaled to zero (sleep-aware Kubernetes deployments): resting, not broken. */
+        .status-asleep {
+            background-color: #60a5fa;
+            box-shadow: 0 0 8px rgba(96, 165, 250, 0.5);
+        }
+        
+        .status-waking {
+            background-color: #f59e0b;
+            box-shadow: 0 0 8px rgba(245, 158, 11, 0.5);
+            animation: status-pulse 1.2s ease-in-out infinite;
+        }
+        
+        @keyframes status-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.35; }
+        }
+        
         .info-row {
             display: flex;
             justify-content: space-between;
@@ -630,8 +647,8 @@
                 <div class="quick-stat">
                     <span class="quick-stat-label">Status</span>
                     <span class="quick-stat-value" id="sidebar-status">
-                        <span data-status-online th:class="${status.online} ? 'status-indicator status-online' : 'status-indicator status-offline'"></span>
-                        <span data-status-text th:text="${status.online} ? 'Online' : 'Offline'">Online</span>
+                        <span data-status-online th:class="'status-indicator status-' + ${#strings.toLowerCase(serverState.name())}"></span>
+                        <span data-status-text th:text="${serverState.name() == 'ASLEEP'} ? 'Asleep — join to wake' : ${serverState.label}" th:title="${serverState.message}">Online</span>
                     </span>
                 </div>
                 <div class="quick-stat">
@@ -689,8 +706,8 @@
             <div class="info-row">
                 <span class="info-label">Status</span>
                 <span class="info-value">
-                    <span data-status-online th:class="${status.online} ? 'status-indicator status-online' : 'status-indicator status-offline'"></span>
-                    <span data-status-text th:text="${status.online} ? 'Online' : 'Offline'">Online</span>
+                    <span data-status-online th:class="'status-indicator status-' + ${#strings.toLowerCase(serverState.name())}"></span>
+                    <span data-status-text th:text="${serverState.name() == 'ASLEEP'} ? 'Asleep — join to wake' : ${serverState.label}" th:title="${serverState.message}">Online</span>
                 </span>
             </div>
             <div class="info-row">
@@ -711,7 +728,8 @@
             </div>
             <div class="info-row">
                 <span class="info-label">Current Players</span>
-                <span class="info-value" th:text="${status.playerList}">Loading...</span>
+                <span class="info-value" data-player-list
+                      th:text="${serverState.name() == 'ASLEEP'} ? 'Nobody — the server is asleep and wakes when someone joins' : (${serverState.name() == 'WAKING'} ? 'The server is starting' : ${status.playerList})">Loading...</span>
             </div>
         </div>
         
@@ -1486,13 +1504,30 @@
                 if (!response.ok) throw new Error('HTTP ' + response.status);
                 const status = await response.json();
 
+                // serverState is ONLINE/OFFLINE everywhere, plus ASLEEP/WAKING when the
+                // dashboard is sleep-aware (a wrapper scaled to zero on Kubernetes).
+                const state = status.serverState || (status.online ? 'ONLINE' : 'OFFLINE');
+                const stateText = {
+                    ONLINE: 'Online',
+                    OFFLINE: 'Offline',
+                    ASLEEP: 'Asleep — join to wake',
+                    WAKING: 'Waking'
+                }[state] || state;
                 document.querySelectorAll('[data-status-online]').forEach(el => {
-                    el.className = status.online
-                        ? 'status-indicator status-online'
-                        : 'status-indicator status-offline';
+                    el.className = 'status-indicator status-' + state.toLowerCase();
                 });
                 document.querySelectorAll('[data-status-text]').forEach(el => {
-                    el.textContent = status.online ? 'Online' : 'Offline';
+                    el.textContent = stateText;
+                    if (status.serverStateMessage) el.title = status.serverStateMessage;
+                });
+                document.querySelectorAll('[data-player-list]').forEach(el => {
+                    if (state === 'ASLEEP') {
+                        el.textContent = 'Nobody — the server is asleep and wakes when someone joins';
+                    } else if (state === 'WAKING') {
+                        el.textContent = 'The server is starting';
+                    } else if (status.playerList) {
+                        el.textContent = status.playerList;
+                    }
                 });
 
                 // Update Last Updated relative timestamp (server-rendered value remains; recompute relative)

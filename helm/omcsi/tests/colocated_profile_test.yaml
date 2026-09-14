@@ -9,6 +9,8 @@ templates:
   - templates/ingress.yaml
   - templates/pdb.yaml
   - templates/pvc.yaml
+  - templates/rbac.yaml
+  - templates/networkpolicies.yaml
 values:
   - ../values-colocated.yaml
 set:
@@ -62,6 +64,62 @@ tests:
             name: JAVA_TOOL_OPTIONS
             value: "-Xmx160m -XX:+UseSerialGC"
         documentIndex: 0
+
+  - it: dashboard does not wait for the sleeping wrapper
+    # The profile's wrapper starts at 0 replicas, so an init container polling
+    # its health would hold the dashboard at Init and `helm --wait` would never
+    # return; the profile turns sleep-aware mode on to drop it.
+    template: templates/webapp.yaml
+    asserts:
+      - isNull:
+          path: spec.template.spec.initContainers
+        documentIndex: 0
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: RELEASE-NAME-omcsi-webapp
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SLEEP_AWARE_ENABLED
+            value: "true"
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WRAPPER_STATEFULSET_NAME
+            value: RELEASE-NAME-omcsi-minecraft-wrapper
+        documentIndex: 0
+
+  - it: dashboard gets a ServiceAccount that can scale the wrapper and nothing else
+    template: templates/rbac.yaml
+    asserts:
+      - hasDocuments:
+          count: 3
+      - contains:
+          path: rules
+          content:
+            apiGroups: [apps]
+            resources: [statefulsets/scale]
+            resourceNames: [RELEASE-NAME-omcsi-minecraft-wrapper]
+            verbs: [get, patch]
+        documentIndex: 1
+
+  - it: dashboard may reach the Kubernetes API
+    template: templates/networkpolicies.yaml
+    asserts:
+      - contains:
+          path: spec.egress
+          content:
+            ports:
+              - port: 443
+                protocol: TCP
+              - port: 6443
+                protocol: TCP
+            to:
+              - ipBlock:
+                  cidr: 0.0.0.0/0
+        documentIndex: 1
 
   - it: nginx claims no address of its own
     template: templates/nginx.yaml

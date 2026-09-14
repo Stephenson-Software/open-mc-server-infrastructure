@@ -181,6 +181,20 @@ spec:
         - podSelector:
             matchLabels:
               {{- include "omcsi.selectorLabels" (dict "root" . "component" "alert-manager") | nindent 14 }}
+    {{- if .Values.webapp.sleepAware.enabled }}
+    # Kubernetes API, to read and patch the wrapper StatefulSet's scale. The
+    # `kubernetes` Service is a ClusterIP DNATed to the control plane's real
+    # address and most CNIs evaluate egress after that translation, so this
+    # names the API server's own port rather than the Service's.
+    - ports:
+        - port: 443
+          protocol: TCP
+        - port: {{ ((.Values.networkPolicy).kubeApiServerPort) | default 6443 }}
+          protocol: TCP
+      to:
+        - ipBlock:
+            cidr: {{ ((.Values.networkPolicy).kubeApiServerCIDR) | default "0.0.0.0/0" | quote }}
+    {{- end }}
     # DNS — scoped to CoreDNS (adjust networkPolicy.dnsNamespaceSelector/dnsPodSelector for non-standard distros)
     - ports:
         - port: 53

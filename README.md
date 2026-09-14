@@ -1383,8 +1383,24 @@ It can also put an idle server to sleep and wake it on the next connection
 on one node affordable — an empty server then costs its volume and nothing
 else. The wrapper is a StatefulSet, which is what mc-router scales; a release
 meant to be born asleep sets `minecraftWrapper.replicas: 0` and mc-router
-scales it to 1 when the first player connects. Nothing else about the chart
-changes for that.
+scales it to 1 when the first player connects.
+
+A release born asleep also needs `webapp.sleepAware.enabled: true` (the profile
+sets it). Without it the dashboard's `wait-for-wrapper` init container polls a
+wrapper that never comes, so the dashboard and nginx sit at `Init` and
+`helm --wait` never returns; and once up, a scaled-to-zero wrapper looks exactly
+like a crashed one. With it, the init container is left out, the dashboard gets
+a ServiceAccount whose Role can `get` the wrapper StatefulSet and `get`/`patch`
+its `scale` subresource — that one object, by name, and nothing else — and it
+reads the replica count through the Kubernetes API: 0 replicas shows as
+"Asleep — join to wake" on both pages, a replica that is not answering yet
+shows as "Waking", and the admin page's **Start** button scales the StatefulSet
+to 1 (the wrapper's own `MINECRAFT_AUTO_START` then brings the game up). The
+webapp NetworkPolicy gains an egress rule to the API server for this; narrow
+`networkPolicy.kubeApiServerCIDR` to the control plane's address for tighter
+control. If the API cannot be read the dashboard logs it once and shows plain
+wrapper status, as before. The flag is off by default and Kubernetes-only —
+Compose has nothing to scale to zero.
 
 Two things to know before going the Velocity/BungeeCord way instead, because
 both are easy to discover late:

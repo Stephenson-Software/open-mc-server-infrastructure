@@ -193,3 +193,83 @@ tests:
             name: WORLD_UPLOAD_READ_TIMEOUT_SECONDS
             value: "3600"
         documentIndex: 0
+
+  # ---------------------------------------------------------------------------
+  # Sleep-aware mode (webapp.sleepAware.enabled). Off by default: the init
+  # container stays, no ServiceAccount token is mounted, no extra env.
+  # ---------------------------------------------------------------------------
+  - it: does not mount a ServiceAccount token by default
+    asserts:
+      - equal:
+          path: spec.template.spec.automountServiceAccountToken
+          value: false
+        documentIndex: 0
+      - isNull:
+          path: spec.template.spec.serviceAccountName
+        documentIndex: 0
+
+  - it: renders no sleep-aware env by default
+    asserts:
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SLEEP_AWARE_ENABLED
+            value: "true"
+        documentIndex: 0
+      - notContains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WRAPPER_STATEFULSET_NAME
+            value: RELEASE-NAME-omcsi-minecraft-wrapper
+        documentIndex: 0
+
+  - it: omits the wait-for-wrapper init container when sleep-aware
+    # A wrapper resting at 0 replicas never becomes healthy, so waiting for it
+    # would hold the dashboard (and nginx behind it) at Init forever.
+    set:
+      webapp.sleepAware.enabled: true
+    asserts:
+      - isNull:
+          path: spec.template.spec.initContainers
+        documentIndex: 0
+
+  - it: runs as its own ServiceAccount with the token mounted when sleep-aware
+    set:
+      webapp.sleepAware.enabled: true
+    asserts:
+      - equal:
+          path: spec.template.spec.serviceAccountName
+          value: RELEASE-NAME-omcsi-webapp
+        documentIndex: 0
+      - equal:
+          path: spec.template.spec.automountServiceAccountToken
+          value: true
+        documentIndex: 0
+
+  - it: tells the dashboard which StatefulSet to watch when sleep-aware
+    set:
+      webapp.sleepAware.enabled: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: SLEEP_AWARE_ENABLED
+            value: "true"
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WRAPPER_STATEFULSET_NAME
+            value: RELEASE-NAME-omcsi-minecraft-wrapper
+        documentIndex: 0
+
+  - it: readiness never depends on the wrapper when sleep-aware
+    # The probe hits the dashboard's own root, which redirects without touching
+    # the wrapper, so a sleeping wrapper cannot keep the dashboard unready.
+    set:
+      webapp.sleepAware.enabled: true
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].readinessProbe.httpGet.path
+          value: /
+        documentIndex: 0
