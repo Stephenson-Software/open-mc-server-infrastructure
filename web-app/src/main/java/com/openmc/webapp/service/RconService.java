@@ -86,6 +86,16 @@ public class RconService {
         }
     }
     
+    /**
+     * A status that says "offline" without attempting a connection — for a server
+     * the dashboard already knows is asleep (see {@link ServerStateService#knownAsleep()}).
+     * The last successful fetch's resource usage is kept so the page still has numbers.
+     */
+    public ServerStatus offlineStatus() {
+        ResourceUsage usage = cachedStatus != null ? cachedStatus.getResourceUsage() : null;
+        return new ServerStatus(serverConfig, "Error: server is asleep", usage);
+    }
+
     public ServerStatus getServerStatus() {
         // Check if we need to refresh the cache
         if (shouldRefreshCache()) {

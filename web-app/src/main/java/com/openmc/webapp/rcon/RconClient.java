@@ -19,7 +19,11 @@ public class RconClient implements AutoCloseable {
     private int requestId = 0;
     
     public RconClient(String host, int port, String password) throws IOException {
-        socket = new Socket(host, port);
+        // A bounded connect: a Service with no endpoints (the wrapper scaled to
+        // zero) drops the SYN rather than refusing it, and an unbounded connect
+        // would hang the dashboard for the kernel's full retry window.
+        socket = new Socket();
+        socket.connect(new java.net.InetSocketAddress(host, port), 3000);
         try {
             socket.setSoTimeout(5000);
             out = new DataOutputStream(socket.getOutputStream());
