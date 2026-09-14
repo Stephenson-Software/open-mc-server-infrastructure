@@ -34,7 +34,7 @@ spec:
       storage: {{ .Values.persistence.webappData.size }}
 {{- end }}
 ---
-{{- if .Values.persistence.alertManagerData.enabled }}
+{{- if and .Values.persistence.alertManagerData.enabled .Values.alertManager.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -52,7 +52,7 @@ spec:
       storage: {{ .Values.persistence.alertManagerData.size }}
 {{- end }}
 ---
-{{- if .Values.persistence.backups.enabled }}
+{{- if and .Values.persistence.backups.enabled .Values.backupManager.enabled }}
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

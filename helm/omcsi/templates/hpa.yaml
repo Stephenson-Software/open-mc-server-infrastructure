@@ -45,7 +45,7 @@ spec:
           type: Utilization
           averageUtilization: {{ .Values.webapp.autoscaling.targetCPUUtilizationPercentage }}
 {{- end }}
-{{- if .Values.alertManager.autoscaling.enabled }}
+{{- if and .Values.alertManager.enabled .Values.alertManager.autoscaling.enabled }}
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
