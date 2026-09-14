@@ -198,3 +198,16 @@ tests:
       - matchRegex:
           path: data["nginx.conf"]
           pattern: 'listen 80;[\s\S]*?location /api/world/ \{[\s\S]*?listen 443 ssl;'
+
+  - it: forwards the controller's https scheme to the web app instead of nginx's own
+    template: templates/nginx-configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'map \$http_x_forwarded_proto \$omcsi_forwarded_proto'
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'proxy_set_header X-Forwarded-Proto \$omcsi_forwarded_proto;'
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: 'X-Forwarded-Proto \$scheme;'
