@@ -30,8 +30,13 @@ minecraftWrapper:
     repository: dmccoystephenson/open-mc-server
     tag: latest
     pullPolicy: Always
-  # replicaCount is fixed at 1 — a single Minecraft server instance must own
-  # the world data exclusively.  The value is hardcoded in the template.
+  # The wrapper is a StatefulSet and may only ever have 0 or 1 replicas — a
+  # single Minecraft server instance must own the world data exclusively, and
+  # the template refuses any other value.  0 means "asleep": the world stays on
+  # its PVC and nothing runs.  Set it to 0 for a release that a hostname router
+  # such as itzg/mc-router wakes on the first player connection (see
+  # "Co-locating servers" in README.md); leave it at 1 otherwise.
+  replicas: 1
   resources:
     requests:
       cpu: "500m"
@@ -50,6 +55,11 @@ minecraftWrapper:
     # set this to 25565 AND widen the apiserver --service-node-port-range to
     # include it (e.g. 80-32767). See terraform/hetzner for a worked example.
     nodePort: ""
+    # Annotations for the external game Service. A hostname router discovers
+    # backends through these — itzg/mc-router, for example, reads
+    #   mc-router.itzg.me/externalServerName: oak.example.com
+    # and proxies connections whose handshake names that host to this Service.
+    annotations: {}
   # Internal ClusterIP service for RCON, BlueMap, and wrapper API.
   internalService:
     rconPort: 25575
