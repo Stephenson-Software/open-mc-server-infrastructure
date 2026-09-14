@@ -1,3 +1,81 @@
+{{- /*
+The proxy locations, shared by the plain-HTTP server block (when an Ingress
+terminates TLS in front of this nginx) and the HTTPS server block.
+*/ -}}
+{{- define "omcsi.nginx.locations" -}}
+location /api/plugins/ {
+    proxy_pass http://{{ include "omcsi.fullname" . }}-minecraft-wrapper-internal:{{ .Values.minecraftWrapper.internalService.wrapperPort }};
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $omcsi_forwarded_proto;
+
+    # Stream the body straight through rather than spooling the whole
+    # upload to nginx's temp directory first.
+    proxy_request_buffering off;
+
+    proxy_connect_timeout 60s;
+    proxy_send_timeout    {{ .Values.nginx.uploadTimeout }};
+    proxy_read_timeout    {{ .Values.nginx.uploadTimeout }};
+}
+
+# World upload/list/delete are served by the web app, but an upload can run
+# for far longer than the 60s the dashboard's other requests need, and a
+# multi-GB body must not be spooled to disk inside the nginx container. Both
+# are why this is a separate location from the catch-all below.
+location /api/world/ {
+    proxy_pass http://{{ include "omcsi.webappHost" . }}:{{ .Values.webapp.service.port }};
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $omcsi_forwarded_proto;
+
+    proxy_request_buffering off;
+
+    proxy_connect_timeout 60s;
+    proxy_send_timeout    {{ .Values.nginx.uploadTimeout }};
+    proxy_read_timeout    {{ .Values.nginx.uploadTimeout }};
+}
+
+{{- if .Values.nginx.bluemap.enabled }}
+# BlueMap's webapp, served by the plugin inside the wrapper container.
+# proxy_pass carries a trailing slash so {{ .Values.nginx.bluemap.path }}
+# maps onto BlueMap's own root; without it every asset path would be
+# prefixed twice and 404.
+location {{ .Values.nginx.bluemap.path }} {
+    proxy_pass http://{{ include "omcsi.fullname" . }}-minecraft-wrapper-internal:{{ .Values.minecraftWrapper.internalService.bluemapPort }}/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $omcsi_forwarded_proto;
+
+    # Tile requests are many and small; keep them cheap.
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+
+    proxy_connect_timeout 60s;
+    proxy_send_timeout    60s;
+    proxy_read_timeout    60s;
+}
+
+{{- end }}
+location / {
+    proxy_pass http://{{ include "omcsi.webappHost" . }}:{{ .Values.webapp.service.port }};
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $omcsi_forwarded_proto;
+
+    # WebSocket support
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+
+    proxy_connect_timeout 60s;
+    proxy_send_timeout    60s;
+    proxy_read_timeout    60s;
+}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -32,6 +110,30 @@ data:
         access_log /dev/stdout;
         error_log  /dev/stderr;
 
+        # Behind an Ingress the controller terminates TLS and reaches nginx
+        # over HTTP, so $scheme is "http" for a request the browser made over
+        # HTTPS. Trust the controller's X-Forwarded-Proto when it says https;
+        # otherwise (reached directly) report our own scheme. Without this the
+        # web app builds redirects as http://host:443/... — a URL nothing can
+        # load.
+        map $http_x_forwarded_proto $omcsi_forwarded_proto {
+            default $scheme;
+            https   https;
+        }
+
+        # Behind an Ingress the controller terminates TLS and reaches this nginx
+        # over plain HTTP, so port 80 must serve the dashboard rather than
+        # redirect: a redirect to https:// comes straight back through the
+        # controller to port 80 again, forever. Without an Ingress, port 80 is
+        # only ever reached directly and the redirect is the right answer.
+        {{- if eq "true" (toString ((.Values.ingress).enabled)) }}
+        # HTTP server – serves the dashboard (Ingress in front)
+        server {
+            listen 80;
+            server_name _;
+            {{- include "omcsi.nginx.locations" . | nindent 12 }}
+        }
+        {{- else }}
         # HTTP server – redirect to HTTPS
         server {
             listen 80;
@@ -41,6 +143,7 @@ data:
                 return 301 https://$host$request_uri;
             }
         }
+        {{- end }}
 
         # HTTPS server
         server {
@@ -50,77 +153,6 @@ data:
             ssl_certificate     /etc/nginx/ssl/cert.pem;
             ssl_certificate_key /etc/nginx/ssl/key.pem;
 
-            location /api/plugins/ {
-                proxy_pass http://{{ include "omcsi.fullname" . }}-minecraft-wrapper-internal:{{ .Values.minecraftWrapper.internalService.wrapperPort }};
-                proxy_set_header Host $host;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto $scheme;
-
-                # Stream the body straight through rather than spooling the whole
-                # upload to nginx's temp directory first.
-                proxy_request_buffering off;
-
-                proxy_connect_timeout 60s;
-                proxy_send_timeout    {{ .Values.nginx.uploadTimeout }};
-                proxy_read_timeout    {{ .Values.nginx.uploadTimeout }};
-            }
-
-            # World upload/list/delete are served by the web app, but an upload can run
-            # for far longer than the 60s the dashboard's other requests need, and a
-            # multi-GB body must not be spooled to disk inside the nginx container. Both
-            # are why this is a separate location from the catch-all below.
-            location /api/world/ {
-                proxy_pass http://{{ include "omcsi.webappHost" . }}:{{ .Values.webapp.service.port }};
-                proxy_set_header Host $host;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto $scheme;
-
-                proxy_request_buffering off;
-
-                proxy_connect_timeout 60s;
-                proxy_send_timeout    {{ .Values.nginx.uploadTimeout }};
-                proxy_read_timeout    {{ .Values.nginx.uploadTimeout }};
-            }
-
-{{- if .Values.nginx.bluemap.enabled }}
-            # BlueMap's webapp, served by the plugin inside the wrapper container.
-            # proxy_pass carries a trailing slash so {{ .Values.nginx.bluemap.path }}
-            # maps onto BlueMap's own root; without it every asset path would be
-            # prefixed twice and 404.
-            location {{ .Values.nginx.bluemap.path }} {
-                proxy_pass http://{{ include "omcsi.fullname" . }}-minecraft-wrapper-internal:{{ .Values.minecraftWrapper.internalService.bluemapPort }}/;
-                proxy_set_header Host $host;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto $scheme;
-
-                # Tile requests are many and small; keep them cheap.
-                proxy_http_version 1.1;
-                proxy_set_header Connection "";
-
-                proxy_connect_timeout 60s;
-                proxy_send_timeout    60s;
-                proxy_read_timeout    60s;
-            }
-
-{{- end }}
-            location / {
-                proxy_pass http://{{ include "omcsi.webappHost" . }}:{{ .Values.webapp.service.port }};
-                proxy_set_header Host $host;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto $scheme;
-
-                # WebSocket support
-                proxy_http_version 1.1;
-                proxy_set_header Upgrade $http_upgrade;
-                proxy_set_header Connection "upgrade";
-
-                proxy_connect_timeout 60s;
-                proxy_send_timeout    60s;
-                proxy_read_timeout    60s;
-            }
+            {{- include "omcsi.nginx.locations" . | nindent 12 }}
         }
     }
