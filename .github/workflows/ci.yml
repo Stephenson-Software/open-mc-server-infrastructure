@@ -225,8 +225,10 @@ jobs:
 
     - name: Verify Deployments
       run: |
-        echo "🔍 Verifying Deployments..."
-        for dep in minecraft-wrapper webapp nginx backup-manager alert-manager; do
+        echo "🔍 Verifying workloads..."
+        kubectl get statefulset omcsi-minecraft-wrapper -o name
+        echo "  ✓ StatefulSet omcsi-minecraft-wrapper exists"
+        for dep in webapp nginx backup-manager alert-manager; do
           kubectl get deployment "omcsi-${dep}" -o name
           echo "  ✓ Deployment omcsi-${dep} exists"
         done
@@ -268,11 +270,11 @@ jobs:
     - name: Verify health probes and webapp init container
       run: |
         echo "🔍 Verifying startup probe on minecraft-wrapper..."
-        STARTUP_PATH=$(kubectl get deployment omcsi-minecraft-wrapper \
+        STARTUP_PATH=$(kubectl get statefulset omcsi-minecraft-wrapper \
           -o jsonpath='{.spec.template.spec.containers[0].startupProbe.httpGet.path}')
         [ "${STARTUP_PATH}" = "/actuator/health" ] || \
           { echo "FAIL: startupProbe path '${STARTUP_PATH}' != /actuator/health"; exit 1; }
-        STARTUP_FT=$(kubectl get deployment omcsi-minecraft-wrapper \
+        STARTUP_FT=$(kubectl get statefulset omcsi-minecraft-wrapper \
           -o jsonpath='{.spec.template.spec.containers[0].startupProbe.failureThreshold}')
         [ "${STARTUP_FT}" = "60" ] || \
           { echo "FAIL: startupProbe failureThreshold '${STARTUP_FT}' != 60"; exit 1; }
