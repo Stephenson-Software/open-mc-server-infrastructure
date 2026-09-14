@@ -3,7 +3,10 @@ The proxy locations, shared by the plain-HTTP server block (when an Ingress
 terminates TLS in front of this nginx) and the HTTPS server block.
 */ -}}
 {{- define "omcsi.nginx.locations" -}}
-location /api/plugins/ {
+# Only the CI deploy endpoint lives on the wrapper. An exact match, because a
+# prefix here swallowed the dashboard's own /api/plugins/list, /upload and
+# /delete (served by the web app) and answered them with the wrapper's 500.
+location = /api/plugins/deploy {
     proxy_pass http://{{ include "omcsi.fullname" . }}-minecraft-wrapper-internal:{{ .Values.minecraftWrapper.internalService.wrapperPort }};
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -12,6 +15,23 @@ location /api/plugins/ {
 
     # Stream the body straight through rather than spooling the whole
     # upload to nginx's temp directory first.
+    proxy_request_buffering off;
+
+    proxy_connect_timeout 60s;
+    proxy_send_timeout    {{ .Values.nginx.uploadTimeout }};
+    proxy_read_timeout    {{ .Values.nginx.uploadTimeout }};
+}
+
+# The dashboard's plugin upload streams a JAR the way a world archive streams:
+# unbuffered, with the long upload timeouts. List and delete are small and fall
+# through to the catch-all.
+location /api/plugins/upload {
+    proxy_pass http://{{ include "omcsi.webappHost" . }}:{{ .Values.webapp.service.port }};
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $omcsi_forwarded_proto;
+
     proxy_request_buffering off;
 
     proxy_connect_timeout 60s;

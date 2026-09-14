@@ -211,3 +211,16 @@ tests:
       - notMatchRegex:
           path: data["nginx.conf"]
           pattern: 'X-Forwarded-Proto \$scheme;'
+
+  - it: routes only the CI deploy endpoint to the wrapper; the dashboard's plugin list/upload/delete reach the web app
+    template: templates/nginx-configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'location = /api/plugins/deploy \{\s+proxy_pass http://RELEASE-NAME-omcsi-minecraft-wrapper-internal:8092;'
+      - notMatchRegex:
+          path: data["nginx.conf"]
+          pattern: 'location /api/plugins/ \{'
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'location /api/plugins/upload \{\s+proxy_pass http://RELEASE-NAME-omcsi-webapp:8080;'
