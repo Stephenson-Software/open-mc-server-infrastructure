@@ -107,7 +107,7 @@ public class ServerController {
     
     @GetMapping("/public")
     public String publicPage(Model model) {
-        RconService.ServerStatus status = rconService.getServerStatus();
+        RconService.ServerStatus status = currentStatus();
         model.addAttribute("status", status);
         model.addAttribute("serverState", resolveState(status));
         model.addAttribute("refreshIntervalMs", serverConfig.getRefreshIntervalMs());
@@ -164,8 +164,20 @@ public class ServerController {
     @GetMapping("/api/status")
     @ResponseBody
     public DashboardStatus getStatus() {
-        RconService.ServerStatus status = rconService.getServerStatus();
+        RconService.ServerStatus status = currentStatus();
         return new DashboardStatus(status, resolveState(status));
+    }
+
+    /**
+     * The RCON status, unless the wrapper is known to be scaled to zero — then an
+     * offline status is returned without connecting, because a Service with no
+     * endpoints drops connections instead of refusing them and the page would hang.
+     */
+    private RconService.ServerStatus currentStatus() {
+        if (serverStateService.knownAsleep().orElse(false)) {
+            return rconService.offlineStatus();
+        }
+        return rconService.getServerStatus();
     }
 
     /**

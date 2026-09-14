@@ -74,6 +74,19 @@ class ServerStateServiceTest {
     class SleepAware {
 
         @Test
+        @DisplayName("knownAsleep answers from the API alone, so callers can skip RCON")
+        void knownAsleepFromApiOnly() {
+            scaleClient.replicas = OptionalInt.of(0);
+            assertEquals(java.util.Optional.of(true), sleepAware().knownAsleep());
+            scaleClient.replicas = OptionalInt.of(1);
+            assertEquals(java.util.Optional.of(false), sleepAware().knownAsleep());
+            scaleClient.replicas = OptionalInt.empty();
+            assertEquals(java.util.Optional.empty(), sleepAware().knownAsleep());
+            assertEquals(java.util.Optional.empty(), new ServerStateService(null, wrapperService).knownAsleep());
+            verify(wrapperService, never()).isAvailable();
+        }
+
+        @Test
         @DisplayName("zero replicas is ASLEEP regardless of the RCON flag")
         void zeroReplicasIsAsleep() {
             scaleClient.replicas = OptionalInt.of(0);

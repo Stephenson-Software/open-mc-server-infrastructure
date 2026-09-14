@@ -60,6 +60,23 @@ public class ServerStateService {
     }
 
     /**
+     * Whether the wrapper is known to be scaled to zero, answered from the
+     * Kubernetes API alone so callers can skip RCON and wrapper calls that would
+     * otherwise hang against a Service with no endpoints. Empty when the dashboard
+     * is not sleep-aware or the replica count cannot be read.
+     */
+    public java.util.Optional<Boolean> knownAsleep() {
+        if (scaleClient == null) {
+            return java.util.Optional.empty();
+        }
+        OptionalInt replicas = scaleClient.getReplicas();
+        if (replicas.isEmpty()) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.of(replicas.getAsInt() == 0);
+    }
+
+    /**
      * Resolve the state to show.
      *
      * @param rconOnline the RCON-derived online flag the dashboard has always used
