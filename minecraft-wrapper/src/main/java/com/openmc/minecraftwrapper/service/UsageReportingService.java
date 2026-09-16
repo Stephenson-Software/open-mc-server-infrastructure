@@ -33,9 +33,12 @@ import java.util.Map;
  * {@code USAGE_REPORTING_ENABLED} (default {@code true}), {@code USAGE_REPORTING_ENDPOINT},
  * {@code USAGE_REPORTING_KEY} and {@code USAGE_REPORTING_TAGS} (comma-separated {@code k=v}
  * pairs attached to the event, e.g. {@code ci=true}). Reporting is on by default;
- * {@code USAGE_REPORTING_ENABLED=false} turns it off. Because other people deploy this
- * stack, one INFO line is logged on every start saying that reporting is on and how to
- * turn it off.
+ * {@code USAGE_REPORTING_ENABLED=false} turns it off, and so do the environment variables
+ * every trace client honours, {@code TRACE_USAGE_REPORTING=off} and {@code DO_NOT_TRACK=1},
+ * which the client checks before anything this service passes it. Because other people
+ * deploy this stack, one INFO line is logged on every start saying that reporting is on and
+ * how to turn it off, or that it is off and why. Details:
+ * https://github.com/Stephenson-Software/trace#usage-reporting
  */
 @Service
 public class UsageReportingService {
@@ -47,8 +50,13 @@ public class UsageReportingService {
     static final String STARTUP_EVENT = "startup";
     static final String VERSION_TAG = "version";
     static final String UNKNOWN_VERSION = "unknown";
+    /** The public page describing what trace collects and every way to turn it off. */
+    static final String DETAILS_URL = "https://github.com/Stephenson-Software/trace#usage-reporting";
+    /** Logged reason when {@code USAGE_REPORTING_ENDPOINT} is blank, which the client itself rejects. */
+    static final String REASON_NO_ENDPOINT = "no endpoint";
 
     private final TraceClient client;
+    private final boolean endpointMissing;
     private final String version;
     private final Map<String, String> configuredTags;
 
@@ -65,29 +73,59 @@ public class UsageReportingService {
     UsageReportingService(boolean enabled, String endpoint, String key, String tags, String version) {
         this.version = version == null || version.isBlank() ? UNKNOWN_VERSION : version.trim();
         this.configuredTags = parseTags(tags);
-        this.client = buildClient(enabled, endpoint, key);
+        this.endpointMissing = endpoint == null || endpoint.isBlank();
+        this.client = buildClient(enabled, endpointMissing ? null : endpoint, key);
         if (client.isEnabled()) {
-            log.info("Usage reporting is on: {} sends a startup event (program name and version only{}) to {}."
-                    + " Turn it off with USAGE_REPORTING_ENABLED=false.",
+            log.info("Usage reporting is on: {} sends its name and version (one startup event{}) to {}"
+                    + " - nothing about players or the server. Turn it off with USAGE_REPORTING_ENABLED=false"
+                    + " in .env or the Helm values, or with TRACE_USAGE_REPORTING=off in the environment."
+                    + " Details: {}",
                     APPLICATION,
                     configuredTags.isEmpty() ? "" : ", plus the configured USAGE_REPORTING_TAGS",
-                    endpoint);
+                    endpoint,
+                    DETAILS_URL);
         } else {
-            log.info("Usage reporting is off.");
+            log.info("Usage reporting is off ({}). Details: {}", disabledReason(), DETAILS_URL);
         }
+    }
+
+    /**
+     * Why nothing will be sent, in this deployment's own terms: the client's reasons are
+     * worded for a Spigot plugin, so its {@code config.yml} becomes the environment variable
+     * an operator actually sets here.
+     */
+    String disabledReason() {
+        String reason = client.disabledReason();
+        if (reason == null) {
+            return null;
+        }
+        if (TraceClient.REASON_ENVIRONMENT.equals(reason)) {
+            return "environment: " + TraceClient.ENV_USAGE_REPORTING + " or " + TraceClient.ENV_DO_NOT_TRACK;
+        }
+        if (endpointMissing) {
+            return REASON_NO_ENDPOINT;
+        }
+        if (TraceClient.REASON_CONFIG.equals(reason)) {
+            return "USAGE_REPORTING_ENABLED=false";
+        }
+        return reason;
     }
 
     private static String versionOf(BuildProperties buildProperties) {
         return buildProperties == null ? UNKNOWN_VERSION : buildProperties.getVersion();
     }
 
+    /**
+     * Always goes through the builder, even when {@code enabled} is false, so the client's
+     * own checks -- the environment variables first -- decide and can say why. A blank
+     * endpoint is the one thing the builder refuses outright, so it is replaced by an
+     * unreachable placeholder and the client disabled; {@link #disabledReason()} names it.
+     */
     private static TraceClient buildClient(boolean enabled, String endpoint, String key) {
-        if (!enabled || endpoint == null || endpoint.isBlank()) {
-            return TraceClient.disabled();
-        }
-        return TraceClient.builder(endpoint, APPLICATION)
+        boolean endpointMissing = endpoint == null;
+        return TraceClient.builder(endpointMissing ? "http://disabled.invalid" : endpoint, APPLICATION)
                 .key(key)
-                .enabled(true)
+                .enabled(enabled && !endpointMissing)
                 .logger(java.util.logging.Logger.getLogger(UsageReportingService.class.getName()))
                 .build();
     }

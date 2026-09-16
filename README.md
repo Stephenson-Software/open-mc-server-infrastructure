@@ -1069,36 +1069,8 @@ configuration toggles — then synthesising a natural language summary.
 
 This differs from a simple `/status` command because the agent **reasons** over the combined data rather than just returning a single API response. If any upstream source is unavailable the agent acknowledges the gap explicitly (e.g. "I wasn't able to reach the backup manager, but based on server status and recent alerts…"). Operators can control whether recent logs are included in diagnostics (and how they are anonymised) using the `diagnostics.logs.*` privacy toggles.
 
-
-### Usage Reporting
-
-Once the `minecraft-wrapper` is up it sends **one `startup` event** to the project's usage
-service, [trace](https://github.com/Stephenson-Software/trace), at
-`https://trace.danielstephenson.dev`, so the maintainers can see how many OMCSI deployments
-exist and which versions they run. It is on by default.
-
-**What is sent:** the program name (`open-mc-server-infrastructure`), the wrapper's version,
-and any `USAGE_REPORTING_TAGS` you set. **What is not:** nothing per request or per player,
-and nothing about your world, your operator account, your host or its address. The send runs
-on its own daemon thread, never blocks startup and never fails the server — an unreachable
-trace server is a dropped report, not an error. The wrapper logs one `INFO` line on every start
-saying reporting is on and how to turn it off. The client is
-[trace-client-java](https://github.com/Stephenson-Software/trace-client-java) vendored as one
-file under `com.openmc.minecraftwrapper.trace`.
-
-- `USAGE_REPORTING_ENABLED`: Set to `false` to turn it off (default: `true`)
-- `USAGE_REPORTING_ENDPOINT`: Where the event goes (default: `https://trace.danielstephenson.dev`)
-- `USAGE_REPORTING_KEY`: The program key. Leave empty to use the project's bundled write-only key (default)
-- `USAGE_REPORTING_TAGS`: Optional comma-separated `k=v` pairs attached to the event, e.g. `ci=true` so a CI deployment can be told apart from a real one. `version` is reserved (default: empty)
-
-To opt out on Docker Compose, set `USAGE_REPORTING_ENABLED=false` in `.env` and restart with
-`./up.sh`. On Kubernetes the equivalents are the `USAGE_REPORTING_*` entries under
-`minecraftWrapper.env` in `helm/omcsi/values.yaml`:
-
-```bash
-helm upgrade omcsi helm/omcsi --namespace omcsi --reuse-values \
-  --set minecraftWrapper.env.USAGE_REPORTING_ENABLED=false
-```
+The `minecraft-wrapper` also reports one anonymous `startup` event per start to the
+project's usage service; the variables for that are under [Usage reporting](#usage-reporting).
 
 ## Client Libraries
 
@@ -1568,6 +1540,48 @@ should not mint credentials nobody requested.
 - Port forwarding best practices
 - Network security hardening
 - Advanced security configurations
+
+## Usage reporting
+
+Usage reporting is on by default: once the `minecraft-wrapper` is up it sends **one
+`startup` event** — its name (`open-mc-server-infrastructure`), its version and any
+`USAGE_REPORTING_TAGS` you set (CI deployments tag `ci=true`) — to the project's usage
+service, [trace](https://github.com/Stephenson-Software/trace), at
+`https://trace.danielstephenson.dev`, so the maintainers can see how many OMCSI deployments
+exist and which versions they run. Nothing else is sent: nothing about players, worlds, IP
+addresses, the host, the operator account, or anything that happens on the server after it
+starts. The send runs on its own daemon thread, never blocks startup and never fails the
+server — an unreachable trace server is a dropped report, not an error. The wrapper logs one
+`INFO` line on every start saying whether reporting is on and, if not, why. The client is
+[trace-client-java](https://github.com/Stephenson-Software/trace-client-java) vendored as one
+file under `com.openmc.minecraftwrapper.trace`.
+
+To turn it off, any one of these is enough:
+
+- **Docker Compose:** `USAGE_REPORTING_ENABLED=false` in `.env`, then `./up.sh`
+- **Kubernetes:** `--set minecraftWrapper.env.USAGE_REPORTING_ENABLED=false` on
+  `helm upgrade` (or the same key in `values.yaml` / `values-override.yaml`)
+- **Any environment:** `TRACE_USAGE_REPORTING=off` (also `false`, `0`, `no`) — the switch
+  every trace client honours, checked before `USAGE_REPORTING_ENABLED`; on Compose it is
+  passed through from `.env`, on Kubernetes it is `minecraftWrapper.env.TRACE_USAGE_REPORTING`
+- **Any environment:** `DO_NOT_TRACK=1` (also `true`, `yes`), per
+  [consoledonottrack.com](https://consoledonottrack.com); passed through from `.env` on Compose
+
+The related variables, for Compose in `.env` and for Kubernetes under `minecraftWrapper.env`
+in `helm/omcsi/values.yaml`:
+
+- `USAGE_REPORTING_ENABLED`: Set to `false` to turn it off (default: `true`)
+- `USAGE_REPORTING_ENDPOINT`: Where the event goes (default: `https://trace.danielstephenson.dev`)
+- `USAGE_REPORTING_KEY`: The program key. Leave empty to use the project's bundled write-only key (default)
+- `USAGE_REPORTING_TAGS`: Optional comma-separated `k=v` pairs attached to the event, e.g. `ci=true` so a CI deployment can be told apart from a real one. `version` is reserved (default: empty)
+- `TRACE_USAGE_REPORTING`: `off` turns it off regardless of the above (default: unset)
+
+```bash
+helm upgrade omcsi helm/omcsi --namespace omcsi --reuse-values \
+  --set minecraftWrapper.env.USAGE_REPORTING_ENABLED=false
+```
+
+Details on what trace collects and why: https://github.com/Stephenson-Software/trace#usage-reporting
 
 ## License
 

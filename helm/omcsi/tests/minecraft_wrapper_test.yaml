@@ -458,3 +458,25 @@ tests:
             name: USAGE_REPORTING_TAGS
             value: "ci=true"
         documentIndex: 0
+
+  # The client-wide switch is unset by default and passed through when set, so the
+  # documented TRACE_USAGE_REPORTING=off opt-out works on Kubernetes too.
+  - it: the trace-wide switch is unset by default and can be set from values
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: TRACE_USAGE_REPORTING
+            value: ""
+        documentIndex: 0
+
+  - it: TRACE_USAGE_REPORTING=off is passed through from values
+    set:
+      minecraftWrapper.env.TRACE_USAGE_REPORTING: "off"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: TRACE_USAGE_REPORTING
+            value: "off"
+        documentIndex: 0
