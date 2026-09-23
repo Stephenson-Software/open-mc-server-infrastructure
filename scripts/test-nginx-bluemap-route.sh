@@ -1,5 +1,7 @@
 #!/bin/bash
-# Test script to verify the optional BlueMap proxy route on Docker Compose.
+# Test script to verify the optional BlueMap proxy route, and the upload size
+# limit and timeouts the entrypoint substitutes into nginx.conf, on Docker
+# Compose.
 #
 # No other check builds or runs the nginx image — "Validate Code and
 # Configuration" only runs shellcheck and `docker compose config`, and "Test
@@ -85,7 +87,7 @@ render_config() {
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-test_log "🚀 Starting nginx BlueMap route test..."
+test_log "🚀 Starting nginx configuration test..."
 
 test_log "Building nginx image..."
 if ! docker build -t "$IMAGE" "$REPO_ROOT/nginx" > /dev/null 2>&1; then
@@ -159,14 +161,43 @@ assert_contains "$CLEANUP_OUT" "ENABLED:[bluemap.conf]" \
 assert_contains "$CLEANUP_OUT" "DISABLED:[]" \
     "The fragment is removed when NGINX_BLUEMAP_ENABLED is turned back off"
 
+# --- Upload size limit and timeouts ------------------------------------------
+# Compose-only: on Kubernetes nginx.conf is a read-only ConfigMap the chart has
+# already rendered, so the entrypoint skips these substitutions there. Overridden
+# values are used because the entrypoint's defaults (100M, 3600s) match what is
+# baked into nginx.conf, so asserting a default would pass even if no
+# substitution ran.
+test_log "Checking the upload size limit and timeout substitutions..."
+LIMITS_CONF="$(render_config -e NGINX_MAX_BODY_SIZE=512M -e NGINX_UPLOAD_TIMEOUT=1800s)"
+
+if [ -z "$LIMITS_CONF" ]; then
+    test_error "nginx rejected its configuration with overridden upload limits"
+    exit 1
+fi
+
+assert_contains "$LIMITS_CONF" "client_max_body_size 512M;" \
+    "NGINX_MAX_BODY_SIZE is substituted into client_max_body_size"
+assert_absent "$LIMITS_CONF" "client_max_body_size 100M;" \
+    "The baked-in upload size limit is replaced"
+assert_contains "$LIMITS_CONF" "proxy_send_timeout 1800s; # upload" \
+    "NGINX_UPLOAD_TIMEOUT is substituted into the upload route's send timeout"
+assert_contains "$LIMITS_CONF" "proxy_read_timeout 1800s; # upload" \
+    "NGINX_UPLOAD_TIMEOUT is substituted into the upload route's read timeout"
+# Negative controls: a substitution that rewrote every proxy timeout would still
+# pass the two assertions above.
+assert_contains "$LIMITS_CONF" "proxy_send_timeout 60s;" \
+    "The dashboard's own send timeout is left alone"
+assert_contains "$LIMITS_CONF" "proxy_read_timeout 60s;" \
+    "The dashboard's own read timeout is left alone"
+
 # --- Results -----------------------------------------------------------------
 test_log "📊 Test Results:"
-test_log "BlueMap route tests passed: $PASSED/$TESTS"
+test_log "nginx configuration tests passed: $PASSED/$TESTS"
 
 if [ "$PASSED" -eq "$TESTS" ]; then
-    test_success "🎉 All nginx BlueMap route tests passed!"
+    test_success "🎉 All nginx configuration tests passed!"
     exit 0
 else
-    test_error "❌ Some nginx BlueMap route tests failed"
+    test_error "❌ Some nginx configuration tests failed"
     exit 1
 fi

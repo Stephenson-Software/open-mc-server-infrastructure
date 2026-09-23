@@ -111,7 +111,10 @@ Builds the `nginx/` image and runs `scripts/test-nginx-bluemap-route.sh`
 against it. The script asks nginx for the configuration it actually resolves
 (`nginx -T`, includes and all) in four states — BlueMap disabled, enabled at the
 default path, enabled at a custom path, and disabled again after having been
-enabled — and asserts the resulting routes.
+enabled — and asserts the resulting routes. It then renders once more with
+`NGINX_MAX_BODY_SIZE` and `NGINX_UPLOAD_TIMEOUT` overridden and asserts that
+both reach `client_max_body_size` and the two `# upload`-tagged timeouts, while
+the dashboard route keeps its own 60s timeouts.
 
 This is the only job that builds or runs the nginx image, so it is what catches
 a `location` block that does not parse, an `include` pointing at a path the
@@ -389,6 +392,9 @@ so a failure is either a build failure or a route assertion.
 - A failed route assertion names the string it expected; check
   `nginx/entrypoint.sh`'s fragment generation and `nginx/nginx.conf`'s
   `include /etc/nginx/omcsi.d/*.conf;` line
+- A failed upload-limit assertion points at the `sed` substitutions in
+  `nginx/entrypoint.sh`, or at the `# upload` comments in `nginx/nginx.conf`
+  that the timeout substitution is anchored on
 - Reproduce the whole job locally with `scripts/test-nginx-bluemap-route.sh`
   (also run by `scripts/ci-local.sh` when a Docker daemon is reachable)
 - The Kubernetes side of the same routes is covered by
