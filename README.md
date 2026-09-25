@@ -45,8 +45,8 @@ The Self-Hosting Guide covers:
 - Monitoring and maintenance
 - Advanced security configurations
 
-### Cheapest Cloud Hosting (Hetzner, ~$14/month)
-If you want to run OMCSI in the cloud for the lowest possible cost, the **[Hetzner single-node Terraform module](#deploying-to-hetzner-cloud-cheapest-single-node)** provisions one server, self-manages a `kubeadm` Kubernetes cluster on it, and deploys the Helm chart — all under the $20/month target with no managed-control-plane fee, cloud LoadBalancer, or NAT gateway. See the [Cost Analysis](terraform/COST_ANALYSIS.md) for how this compares to managed Kubernetes (LKE ~$109/mo, EKS ~$248/mo).
+### Cheapest Cloud Hosting (Hetzner, ~$14–28/month)
+If you want to run OMCSI in the cloud for the lowest possible cost, the **[Hetzner single-node Terraform module](#deploying-to-hetzner-cloud-cheapest-single-node)** provisions one server, self-manages a `kubeadm` Kubernetes cluster on it, and deploys the Helm chart — with no managed-control-plane fee, cloud LoadBalancer, or NAT gateway. The default `cax31` is ~$28/month; `server_type = "cax21"` brings it to ~$14/month, under a $20/month budget. See the [Cost Analysis](terraform/COST_ANALYSIS.md) for how this compares to managed Kubernetes (LKE ~$109/mo, EKS ~$248/mo).
 
 ### Kubernetes (Helm)
 OMCSI ships with a Helm chart in [`helm/omcsi/`](helm/omcsi/) for deploying to any Kubernetes cluster (k3s, kind, EKS, GKE, etc.).
@@ -396,7 +396,7 @@ minikube delete
 
 #### Deploying to Hetzner Cloud (cheapest, single node)
 
-The [`terraform/hetzner/`](terraform/hetzner/) directory contains Terraform configuration that provisions a **single Hetzner Cloud server**, bootstraps a self-managed single-node Kubernetes cluster on it with `kubeadm`, and deploys the OMCSI Helm chart — in one `terraform apply`. It is the **lowest-cost cloud option (~$14/month on the default `cax31`)** because it carries none of the managed-Kubernetes charges:
+The [`terraform/hetzner/`](terraform/hetzner/) directory contains Terraform configuration that provisions a **single Hetzner Cloud server**, bootstraps a self-managed single-node Kubernetes cluster on it with `kubeadm`, and deploys the OMCSI Helm chart — in one `terraform apply`. It is the **lowest-cost cloud option (~$28/month on the default `cax31`, ~$14/month on `cax21`)** because it carries none of the managed-Kubernetes charges:
 
 - **No control-plane fee** — the control plane runs on the same node (untainted so workloads schedule on it)
 - **No cloud LoadBalancer** — services are exposed via fixed NodePorts (25565/80/443) on the node's public IP (the API server's `--service-node-port-range` is widened to `80-32767`)

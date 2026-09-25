@@ -6,13 +6,13 @@ This document summarizes the monthly cost difference between the supported Terra
 
 OMCSI is a **single Minecraft server plus a handful of small Spring Boot services** — its real footprint is roughly 5 GB of RAM, not the 16 GB the managed-cluster defaults provision. Most of the cost on managed Kubernetes is *infrastructure tax* that the workload never asked for: a control-plane fee, a cloud LoadBalancer, a NAT gateway, and oversized nodes.
 
-If you are willing to self-manage the cluster (kubeadm), a **single Hetzner CAX31 runs the whole stack for ~$14/month — under the $20 target and ~8–18× cheaper than the managed options.** It carries none of the managed-Kubernetes line items: no control-plane fee, no cloud LoadBalancer (services are exposed via NodePorts on the node's public IP), and no NAT gateway.
+If you are willing to self-manage the cluster (kubeadm), a **single Hetzner CAX31 (the module's default) runs the whole stack for ~$28/month — ~4–9× cheaper than the managed options. A CAX21 (~$14/month, 8 GB) is the type that fits under the $20 target**, with a smaller JVM heap. Either one carries none of the managed-Kubernetes line items: no control-plane fee, no cloud LoadBalancer (services are exposed via NodePorts on the node's public IP), and no NAT gateway.
 
 For equivalent *managed* workloads, **LKE is roughly 2–3× cheaper than EKS**, driven mainly by EKS's mandatory $73/month control-plane fee per cluster, which LKE does not charge.
 
 | Deployment target | Control plane | What you manage | Est. total |
 |---|---|---|---|
-| **Hetzner CAX31 (self-managed kubeadm)** | $0 (on the node) | The cluster (CKA-style) | **~$14/mo** |
+| **Hetzner CAX31 (self-managed kubeadm)** | $0 (on the node) | The cluster (CKA-style) | **~$28/mo** (CAX21: ~$14/mo) |
 | LKE (managed) | $0 | Apps only | ~$109/mo |
 | EKS (managed) | $73 | Apps only | ~$248/mo |
 
@@ -25,19 +25,20 @@ The `terraform/hetzner/` module provisions one Hetzner Cloud server, bootstraps 
 | Component | Cost | Notes |
 |---|---|---|
 | Control plane | **$0** | Runs on the same node (untainted control plane) |
-| Server (1× cax31) | **~€12.49 (~$14)** | Ampere ARM64, 8 vCPU / 16 GB / 160 GB NVMe |
+| Server (1× cax31) | **~€24.99 (~$28)** | Ampere ARM64, 8 vCPU / 16 GB / 160 GB NVMe |
 | Load balancer | **$0** | NodePorts pinned to 25565/80/443 on the node's public IP (apiserver `--service-node-port-range` widened to `80-32767`) |
 | NAT gateway | **$0** | Node has a public IP directly |
 | Egress | **$0** | Hetzner bundles 20 TB/mo |
 | Block storage | **$0** | `local-path` provisioner uses the node's included NVMe |
-| **Estimated total** | **~$14/mo** | |
+| **Estimated total** | **~$28/mo** | ~$14/mo with `server_type = "cax21"` (~€12.49, 4 vCPU / 8 GB) |
 
 **Cheaper / alternative hosts** (the module's `server_type` / `location` cover Hetzner; the same kubeadm approach applies elsewhere):
 
 | Host | Specs | Cost | Notes |
 |---|---|---|---|
 | Oracle Cloud Always Free (Ampere A1) | 4 OCPU / 24 GB | **$0** | Free forever, but ARM + frequent "Out of Capacity"; needs multi-arch images |
-| Hetzner CAX31 (default) | 8 vCPU / 16 GB | ~$14 | Best price/performance; ARM |
+| Hetzner CAX31 (default) | 8 vCPU / 16 GB | ~$28 | Most headroom; ARM |
+| Hetzner CAX21 | 4 vCPU / 8 GB | ~$14 | Under the $20 target; ARM; lower `java_opts` (e.g. `-Xmx4G -Xms2G`) |
 | Hetzner CPX31 | 4 vCPU / 8 GB | ~$9–18 | x86; tighter RAM but sufficient |
 | Contabo VPS 10 | 4 vCPU / 8 GB | ~$5–7 | Cheapest; weaker CPU/disk (fine for 5–10 players) |
 
@@ -113,7 +114,7 @@ Linode shared instances are significantly cheaper than AWS on-demand instances f
 ## When to Choose Each Provider
 
 ### Choose Hetzner self-managed (`terraform/hetzner/`) when:
-- Cost is the top priority and you want to stay under ~$20/month
+- Cost is the top priority (under ~$20/month on `cax21`, ~$28/month on the default `cax31`)
 - You're comfortable operating the cluster yourself (kubeadm, upgrades, backups)
 - A single node without HA is acceptable for your community size
 - You want the cheapest path that still uses the standard OMCSI Helm chart
@@ -135,6 +136,7 @@ Linode shared instances are significantly cheaper than AWS on-demand instances f
 ## Notes
 
 - All prices are approximate and based on publicly listed rates as of 2025. Actual costs may vary by region and usage.
+- Hetzner CAX prices were re-checked against the Hetzner Cloud API on 2026-09-06 (cax21 €12.49, cax31 €24.99). USD figures use ~1.12 USD/EUR. The `estimated_monthly_cost` Terraform output deliberately quotes no price, since committed prices go stale.
 - AWS costs can be reduced with Reserved Instances, Savings Plans, or Spot Instances — but these require upfront commitment or accept interruption risk.
 - Linode pricing is generally flat and predictable; there are no per-GB data processing fees for NAT or load balancers.
 - This analysis covers infrastructure costs only. Operational costs (staff time, tooling) are not included.
