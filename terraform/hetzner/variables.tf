@@ -15,7 +15,7 @@ variable "server_name" {
 }
 
 variable "server_type" {
-  description = "Hetzner Cloud server type. Defaults to cax31 (Ampere ARM64, 8 vCPU / 16 GB / 160 GB NVMe, ~EUR 12.49/mo) which comfortably runs the full OMCSI stack under the $20/mo target. Other ARM options: cax21 (4 vCPU/8 GB), cax41 (16 vCPU/32 GB). For x86 use cpx31. NOTE: ARM types require multi-arch images (the project's CI publishes them)."
+  description = "Hetzner Cloud server type. Defaults to cax31 (Ampere ARM64, 8 vCPU / 16 GB / 160 GB NVMe, ~EUR 24.99/mo as of 2026-09) which comfortably runs the full OMCSI stack. Other ARM options: cax21 (4 vCPU/8 GB, ~EUR 12.49/mo — the type that fits a $20/mo budget; lower java_opts to match), cax41 (16 vCPU/32 GB). For x86 use cpx31. NOTE: ARM types require multi-arch images (the project's CI publishes them)."
   type        = string
   default     = "cax31"
 }

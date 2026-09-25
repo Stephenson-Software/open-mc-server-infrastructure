@@ -38,6 +38,6 @@ output "kubectl_hint" {
 }
 
 output "estimated_monthly_cost" {
-  description = "Rough monthly infrastructure cost (server type dependent; cax31 default ≈ EUR 12.49)."
-  value       = "Server type '${var.server_type}' in '${var.location}'. cax31 ≈ EUR 12.49/mo (~$14), well under the $20 target. No control-plane, LoadBalancer, or NAT charges."
+  description = "What the monthly bill consists of. No price is quoted: Hetzner pricing changes, so check the current rate for the chosen server_type."
+  value       = "Server type '${var.server_type}' in '${var.location}'. Check Hetzner's current price for this type (see terraform/COST_ANALYSIS.md). No control-plane, LoadBalancer, or NAT charges."
 }
