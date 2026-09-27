@@ -179,4 +179,17 @@ class MinecraftServerServiceTest {
             assertNull(parseTps());
         }
     }
+
+    // ── Server command ───────────────────────────────────────────────────────
+
+    @Test
+    void serverCommandUsesTheConfiguredJavaAndSplitsTheOptions() {
+        ReflectionTestUtils.setField(service, "javaBin", "/usr/lib/jvm/java-17-openjdk-amd64/bin/java");
+        ReflectionTestUtils.setField(service, "javaOpts", " -Xmx2G  -Xms1G ");
+        ReflectionTestUtils.setField(service, "serverJar", "spigot-1.19.4.jar");
+
+        assertEquals(
+                List.of("/usr/lib/jvm/java-17-openjdk-amd64/bin/java", "-Xmx2G", "-Xms1G", "-jar", "spigot-1.19.4.jar", "nogui"),
+                service.buildServerCommand());
+    }
 }

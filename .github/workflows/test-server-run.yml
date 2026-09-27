@@ -17,7 +17,8 @@ jobs:
 
     # `default` is sample.env's MINECRAFT_VERSION. 1.19.4 is the oldest version a plugin
     # test built on this image is expected to boot, and the builder must pick an older JDK
-    # for it (resources/buildtools-java.sh): BuildTools refuses 1.19.4 on Java 25.
+    # for it to build and run on (resources/java-for-minecraft.sh): both BuildTools and the
+    # 1.19.4 server refuse Java 25.
     strategy:
       fail-fast: false
       matrix:

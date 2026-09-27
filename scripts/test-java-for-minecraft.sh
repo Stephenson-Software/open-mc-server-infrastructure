@@ -1,8 +1,9 @@
 #!/bin/bash
-# Test script for resources/buildtools-java.sh, the builder stage's choice of JDK per
-# Minecraft version. BuildTools refuses a JDK outside the range a version supports, so a
-# wrong choice fails the image build for that version; this pins the boundaries (1.20.5,
-# where 21 becomes required, and 26.x, which needs 25) without building Spigot.
+# Test script for resources/java-for-minecraft.sh, the image's choice of JDK per Minecraft
+# version (for BuildTools and for the server). BuildTools and the server both refuse a JDK
+# outside the range a version supports, so a wrong choice fails that version's image build
+# or its first start; this pins the boundaries (1.20.5, where 21 becomes required, and 26.x,
+# which needs 25) without building Spigot.
 set -euo pipefail
 
 RED='\033[0;31m'
@@ -15,7 +16,7 @@ test_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
 test_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PICK="$SCRIPT_DIR/../resources/buildtools-java.sh"
+PICK="$SCRIPT_DIR/../resources/java-for-minecraft.sh"
 TEST_ROOT="$(mktemp -d)"
 FAILURES=0
 
@@ -60,9 +61,28 @@ expect 1.21.11 "$JDK21"
 expect 26.1 "$JDK25"
 expect 26.2 "$JDK25"
 
+test_log "--major names the JDK without needing it installed"
+expect_major() {
+    local version="$1" want="$2" got
+    got=$(JVM_DIR=/nonexistent sh "$PICK" --major "$version" 2>/dev/null) || got="(refused)"
+    if [ "$got" = "$want" ]; then
+        test_success "--major $version -> $got"
+    else
+        test_error "--major $version: expected $want, got $got"
+        FAILURES=$((FAILURES + 1))
+    fi
+}
+expect_major 1.19.4 17
+expect_major 1.20.4 17
+expect_major 1.20.5 21
+expect_major 1.21.11 21
+expect_major 26.2 25
+expect_major 1.16.5 "(refused)"
+
 test_log "Versions the image cannot build are refused"
 expect 1.16.5 "(refused)"
 expect 1.x "(refused)"
+expect 1. "(refused)"
 
 test_log "A missing JDK is reported, not replaced by another"
 rm -rf "$TEST_ROOT/jvm/java-17-openjdk-arm64"
@@ -72,4 +92,4 @@ if [ "$FAILURES" -ne 0 ]; then
     test_error "$FAILURES check(s) failed"
     exit 1
 fi
-test_success "All buildtools-java.sh checks passed"
+test_success "All java-for-minecraft.sh checks passed"
