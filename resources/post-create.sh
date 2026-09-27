@@ -318,11 +318,20 @@ start_server() {
     export JAVA_OPTS="${JAVA_OPTS:--Xmx2G -Xms1G}"
     export MINECRAFT_AUTO_START=true
     
+    # The server runs on the JDK its version accepts (resources/java-for-minecraft.sh);
+    # the wrapper passes MINECRAFT_JAVA to the server process it starts.
+    MINECRAFT_JAVA=$(/resources/java-for-minecraft.sh "$MINECRAFT_VERSION") || {
+        log "ERROR: no Java runtime in this image can run Minecraft $MINECRAFT_VERSION"
+        exit 1
+    }
+    export MINECRAFT_JAVA
+    log "Using $MINECRAFT_JAVA for the Minecraft $MINECRAFT_VERSION server"
+
     # Spring Boot 3.2.0 has runtime compatibility issues with Java 25: embedded Tomcat
     # and Spring framework internals rely on APIs that were removed or restricted in
     # Java 25, causing request processing failures. Run the wrapper explicitly under
-    # Java 21.  The Spigot server subprocess spawned by the wrapper will inherit PATH
-    # and use 'java' from /opt/java/openjdk/bin (Java 25, set by the temurin base image).
+    # Java 21.  The Spigot server subprocess spawned by the wrapper runs on MINECRAFT_JAVA
+    # (above): Java 25 from the temurin base image for 26.x, older JDKs for older versions.
     local java21_bin
     java21_bin=$(find /usr/lib/jvm -path '*/java-21-openjdk-*/bin/java' -print -quit 2>/dev/null || true)
     if [ -z "$java21_bin" ] || [ ! -x "$java21_bin" ]; then

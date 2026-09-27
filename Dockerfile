@@ -37,6 +37,16 @@ RUN apt-get update && \
 
 FROM java25-base as builder
 
+# BuildTools only builds a version on a JDK that version supports, so the builder also carries
+# 17 and 21 for older versions; resources/java-for-minecraft.sh picks one per MINECRAFT_VERSION.
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        openjdk-17-jdk-headless \
+        openjdk-21-jdk-headless && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+COPY resources/java-for-minecraft.sh /usr/local/bin/java-for-minecraft.sh
+
 # Accept Minecraft version as build argument
 ARG MINECRAFT_VERSION=26.2
 
@@ -44,7 +54,9 @@ ARG MINECRAFT_VERSION=26.2
 WORKDIR /mcserver-build
 RUN wget -O BuildTools.jar https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar
 RUN git config --global --unset core.autocrlf || :
-RUN java -jar BuildTools.jar --rev ${MINECRAFT_VERSION} && \
+RUN BUILD_JAVA=$(java-for-minecraft.sh "${MINECRAFT_VERSION}") && \
+    echo "Building Spigot ${MINECRAFT_VERSION} with $("$BUILD_JAVA" -version 2>&1 | head -1)" && \
+    "$BUILD_JAVA" -jar BuildTools.jar --rev ${MINECRAFT_VERSION} && \
     if [ ! -f "spigot-${MINECRAFT_VERSION}.jar" ]; then \
         jar_count=$(find . -maxdepth 1 -type f -newer BuildTools.jar -name "spigot-*.jar" | wc -l); \
         if [ "$jar_count" -eq 0 ]; then \
@@ -70,6 +82,17 @@ FROM java25-runtime as final
 
 # Accept Minecraft version as build argument
 ARG MINECRAFT_VERSION=26.2
+
+# The server refuses a JDK newer than its version supports (1.19.4: "Only up to Java 20 is
+# supported"), so a version below 1.20.5 also gets a Java 17 runtime. 21 is already here for
+# the wrapper; 26.x runs on the image's Java 25. Images for current versions are unchanged.
+COPY resources/java-for-minecraft.sh /usr/local/bin/java-for-minecraft.sh
+RUN if [ "$(java-for-minecraft.sh --major "${MINECRAFT_VERSION}")" = 17 ]; then \
+        apt-get update && \
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends openjdk-17-jre-headless && \
+        apt-get clean && \
+        rm -rf /var/lib/apt/lists/*; \
+    fi
 
 # Copy built server from builder stage
 COPY --from=builder /mcserver-build/spigot-${MINECRAFT_VERSION}.jar /mcserver-build/spigot-${MINECRAFT_VERSION}.jar

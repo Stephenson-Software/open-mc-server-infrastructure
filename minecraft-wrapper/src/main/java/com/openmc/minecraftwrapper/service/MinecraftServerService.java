@@ -36,6 +36,12 @@ public class MinecraftServerService {
     @Value("${minecraft.java.opts:-Xmx2G -Xms1G}")
     private String javaOpts;
 
+    // The java the server runs on. Older Minecraft versions refuse newer JDKs (Spigot 1.19.4
+    // exits with "Only up to Java 20 is supported"), so the image points this at the JDK its
+    // MINECRAFT_VERSION needs; plain `java` from PATH otherwise.
+    @Value("${minecraft.java.bin:java}")
+    private String javaBin;
+
     @Value("${minecraft.auto.start:false}")
     private boolean autoStart;
 
@@ -119,18 +125,7 @@ public class MinecraftServerService {
             // Start FIFO keeper thread to keep the pipe open
             startFifoKeeper();
 
-            // Build the Java command to start Minecraft server
-            List<String> command = new ArrayList<>();
-            command.add("java");
-            // Split Java options
-            for (String opt : javaOpts.split("\\s+")) {
-                if (!opt.isEmpty()) {
-                    command.add(opt);
-                }
-            }
-            command.add("-jar");
-            command.add(serverJar);
-            command.add("nogui");
+            List<String> command = buildServerCommand();
 
             ProcessBuilder processBuilder = new ProcessBuilder(command);
             processBuilder.directory(serverDir);
@@ -554,5 +549,20 @@ public class MinecraftServerService {
         // No TPS line found — cache the null result to avoid re-scanning within the TTL window
         tpsCacheRef.set(new TpsCache(null, Instant.now()));
         return null;
+    }
+
+    /** The command that starts the Minecraft server: the configured java, its options, the jar. */
+    List<String> buildServerCommand() {
+        List<String> command = new ArrayList<>();
+        command.add(javaBin);
+        for (String opt : javaOpts.split("\\s+")) {
+            if (!opt.isEmpty()) {
+                command.add(opt);
+            }
+        }
+        command.add("-jar");
+        command.add(serverJar);
+        command.add("nogui");
+        return command;
     }
 }

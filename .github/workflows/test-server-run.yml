@@ -10,10 +10,19 @@ permissions:
   contents: read
 
 jobs:
-  test-server-run:
-    name: Test Minecraft Server Run
+  test-server-run-matrix:
+    name: Minecraft Server Run (${{ matrix.minecraft-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
+    # `default` is sample.env's MINECRAFT_VERSION. 1.19.4 is the oldest version a plugin
+    # test built on this image is expected to boot, and the builder must pick an older JDK
+    # for it to build and run on (resources/java-for-minecraft.sh): both BuildTools and the
+    # 1.19.4 server refuse Java 25.
+    strategy:
+      fail-fast: false
+      matrix:
+        minecraft-version: ['default', '1.19.4']
     
     steps:
     - name: Checkout code
@@ -33,6 +42,10 @@ jobs:
         sed -i 's/-Xmx3G -Xms2G/-Xmx1G -Xms512M/g' .env
         # Tag this run's usage-reporting startup event so it is not counted as a real deployment
         sed -i 's/^USAGE_REPORTING_TAGS=.*/USAGE_REPORTING_TAGS=ci=true/' .env
+        if [ "${{ matrix.minecraft-version }}" != "default" ]; then
+          sed -i 's/^MINECRAFT_VERSION=.*/MINECRAFT_VERSION=${{ matrix.minecraft-version }}/' .env
+        fi
+        grep '^MINECRAFT_VERSION=' .env
         echo "✓ Environment file created"
         
     - name: Build required images
@@ -110,6 +123,17 @@ jobs:
           echo "⚠️  Could not confirm complete startup in logs"
         fi
         
+        # A non-default version must really be the one running, not the image default
+        if [ "${{ matrix.minecraft-version }}" != "default" ]; then
+          if docker logs open-mc-server 2>&1 | grep -q "Starting minecraft server version ${{ matrix.minecraft-version }}"; then
+            echo "✓ Server is running Minecraft ${{ matrix.minecraft-version }}"
+          else
+            echo "❌ Server is not running Minecraft ${{ matrix.minecraft-version }}"
+            docker logs open-mc-server 2>&1 | grep "Starting minecraft server version" || true
+            exit 1
+          fi
+        fi
+
         # Verify key components loaded
         echo "Checking for essential server components..."
         docker logs open-mc-server 2>&1 | grep -E "Starting minecraft server version|Spigot|Done" | tail -10
@@ -188,3 +212,18 @@ jobs:
         docker compose down -v || true
         docker system prune -af || true
         echo "✓ Cleanup completed"
+
+  # `Test Minecraft Server Run` is a required status check on main. The matrix legs carry the
+  # version in their names, so this job keeps the required name and passes only when every
+  # leg passed.
+  test-server-run:
+    name: Test Minecraft Server Run
+    runs-on: ubuntu-latest
+    needs: test-server-run-matrix
+    if: always()
+    steps:
+    - name: Require every Minecraft version to pass
+      run: |
+        result="${{ needs.test-server-run-matrix.result }}"
+        echo "Matrix result: $result"
+        [ "$result" = "success" ]

@@ -38,7 +38,7 @@ jobs:
         bash -n resources/post-create.sh
 
         echo "🔍 Running ShellCheck linter..."
-        shellcheck up.sh down.sh upgrade.sh rollback.sh trigger-backup.sh resources/post-create.sh scripts/*.sh
+        shellcheck up.sh down.sh upgrade.sh rollback.sh trigger-backup.sh resources/post-create.sh resources/java-for-minecraft.sh scripts/*.sh
         
     - name: Validate Docker configuration
       run: |
@@ -505,6 +505,14 @@ jobs:
         echo "📦 Testing server JAR replacement..."
         ./scripts/test-jar-replacement.sh
         echo "✓ server JAR replacement verified"
+
+    # The image picks the JDK for BuildTools and for the server from MINECRAFT_VERSION; a
+    # wrong pick only shows up as a failed build or first start, so the boundaries are pinned here.
+    - name: Test JDK selection per Minecraft version
+      run: |
+        echo "☕ Testing JDK selection per Minecraft version..."
+        ./scripts/test-java-for-minecraft.sh
+        echo "✓ JDK selection per Minecraft version verified"
 
   python-client-test:
     name: Python Client Tests
