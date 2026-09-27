@@ -10,8 +10,8 @@ permissions:
   contents: read
 
 jobs:
-  test-server-run:
-    name: Test Minecraft Server Run (${{ matrix.minecraft-version }})
+  test-server-run-matrix:
+    name: Minecraft Server Run (${{ matrix.minecraft-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -212,3 +212,18 @@ jobs:
         docker compose down -v || true
         docker system prune -af || true
         echo "✓ Cleanup completed"
+
+  # `Test Minecraft Server Run` is a required status check on main. The matrix legs carry the
+  # version in their names, so this job keeps the required name and passes only when every
+  # leg passed.
+  test-server-run:
+    name: Test Minecraft Server Run
+    runs-on: ubuntu-latest
+    needs: test-server-run-matrix
+    if: always()
+    steps:
+    - name: Require every Minecraft version to pass
+      run: |
+        result="${{ needs.test-server-run-matrix.result }}"
+        echo "Matrix result: $result"
+        [ "$result" = "success" ]
