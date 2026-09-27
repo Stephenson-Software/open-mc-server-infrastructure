@@ -37,6 +37,17 @@ RUN apt-get update && \
 
 FROM java25-base as builder
 
+# BuildTools only builds a version on a JDK that version supports, so the builder also carries
+# 17 and 21 for older versions; resources/buildtools-java.sh picks one per MINECRAFT_VERSION.
+# Only this stage has them: the final image is unchanged.
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        openjdk-17-jdk-headless \
+        openjdk-21-jdk-headless && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+COPY resources/buildtools-java.sh /usr/local/bin/buildtools-java.sh
+
 # Accept Minecraft version as build argument
 ARG MINECRAFT_VERSION=26.2
 
@@ -44,7 +55,9 @@ ARG MINECRAFT_VERSION=26.2
 WORKDIR /mcserver-build
 RUN wget -O BuildTools.jar https://hub.spigotmc.org/jenkins/job/BuildTools/lastSuccessfulBuild/artifact/target/BuildTools.jar
 RUN git config --global --unset core.autocrlf || :
-RUN java -jar BuildTools.jar --rev ${MINECRAFT_VERSION} && \
+RUN BUILD_JAVA=$(buildtools-java.sh "${MINECRAFT_VERSION}") && \
+    echo "Building Spigot ${MINECRAFT_VERSION} with $("$BUILD_JAVA" -version 2>&1 | head -1)" && \
+    "$BUILD_JAVA" -jar BuildTools.jar --rev ${MINECRAFT_VERSION} && \
     if [ ! -f "spigot-${MINECRAFT_VERSION}.jar" ]; then \
         jar_count=$(find . -maxdepth 1 -type f -newer BuildTools.jar -name "spigot-*.jar" | wc -l); \
         if [ "$jar_count" -eq 0 ]; then \

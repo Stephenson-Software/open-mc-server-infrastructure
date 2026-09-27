@@ -38,7 +38,7 @@ jobs:
         bash -n resources/post-create.sh
 
         echo "🔍 Running ShellCheck linter..."
-        shellcheck up.sh down.sh upgrade.sh rollback.sh trigger-backup.sh resources/post-create.sh scripts/*.sh
+        shellcheck up.sh down.sh upgrade.sh rollback.sh trigger-backup.sh resources/post-create.sh resources/buildtools-java.sh scripts/*.sh
         
     - name: Validate Docker configuration
       run: |
@@ -505,6 +505,14 @@ jobs:
         echo "📦 Testing server JAR replacement..."
         ./scripts/test-jar-replacement.sh
         echo "✓ server JAR replacement verified"
+
+    # The builder stage picks BuildTools' JDK from MINECRAFT_VERSION; a wrong pick only
+    # shows up as a failed image build for that version, so the boundaries are pinned here.
+    - name: Test BuildTools JDK selection
+      run: |
+        echo "☕ Testing BuildTools JDK selection..."
+        ./scripts/test-buildtools-java.sh
+        echo "✓ BuildTools JDK selection verified"
 
   python-client-test:
     name: Python Client Tests
