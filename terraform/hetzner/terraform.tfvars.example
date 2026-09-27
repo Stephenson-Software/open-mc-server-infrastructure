@@ -22,7 +22,9 @@ ssh_private_key_path = "~/.ssh/id_ed25519"
 # Game (25565) and web (80/443) stay public regardless.
 # allowed_ssh_cidr = "203.0.113.4/32"
 
-# Server sizing — cax31 (ARM, 16 GB) is the recommended default (~EUR 12.49/mo).
+# Server sizing — cax31 (ARM, 16 GB) is the recommended default (~EUR 24.99/mo).
+# cax21 (ARM, 8 GB, ~EUR 12.49/mo) fits a $20/mo budget; lower java_opts below.
+# Prices as of 2026-09 — check Hetzner's current rates.
 # server_type = "cax31"
 # location    = "fsn1"
 
