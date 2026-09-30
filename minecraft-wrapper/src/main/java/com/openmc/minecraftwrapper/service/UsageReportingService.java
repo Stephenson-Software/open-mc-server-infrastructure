@@ -74,7 +74,7 @@ public class UsageReportingService {
         this.version = version == null || version.isBlank() ? UNKNOWN_VERSION : version.trim();
         this.configuredTags = parseTags(tags);
         this.endpointMissing = endpoint == null || endpoint.isBlank();
-        this.client = buildClient(enabled, endpointMissing ? null : endpoint, key);
+        this.client = buildClient(enabled, endpointMissing ? null : endpoint, key, this.version);
         if (client.isEnabled()) {
             log.info("Usage reporting is on: {} sends its name and version (one startup event{}) to {}"
                     + " - nothing about players or the server. Turn it off with USAGE_REPORTING_ENABLED=false"
@@ -121,9 +121,9 @@ public class UsageReportingService {
      * endpoint is the one thing the builder refuses outright, so it is replaced by an
      * unreachable placeholder and the client disabled; {@link #disabledReason()} names it.
      */
-    private static TraceClient buildClient(boolean enabled, String endpoint, String key) {
+    private static TraceClient buildClient(boolean enabled, String endpoint, String key, String version) {
         boolean endpointMissing = endpoint == null;
-        return TraceClient.builder(endpointMissing ? "http://disabled.invalid" : endpoint, APPLICATION)
+        return TraceClient.builder(endpointMissing ? "http://disabled.invalid" : endpoint, APPLICATION, version)
                 .key(key)
                 .enabled(enabled && !endpointMissing)
                 .logger(java.util.logging.Logger.getLogger(UsageReportingService.class.getName()))
@@ -161,12 +161,12 @@ public class UsageReportingService {
         return client.isEnabled();
     }
 
-    /** The tags attached to the startup event: the wrapper version, then the configured tags. */
+    /**
+     * The tags attached to the startup event: the configured tags. The client adds the
+     * wrapper version ({@code version}) to every event itself.
+     */
     Map<String, String> startupTags() {
-        Map<String, String> tags = new LinkedHashMap<>();
-        tags.put(VERSION_TAG, version);
-        tags.putAll(configuredTags);
-        return tags;
+        return configuredTags;
     }
 
     /** Sends the one {@code startup} event once the wrapper is up and serving requests. */
