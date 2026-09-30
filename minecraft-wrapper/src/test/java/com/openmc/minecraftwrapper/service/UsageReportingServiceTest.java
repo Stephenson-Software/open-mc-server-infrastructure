@@ -72,7 +72,7 @@ class UsageReportingServiceTest {
     }
 
     @Test
-    void configuredTagsAreAttachedAfterTheVersion() throws Exception {
+    void configuredTagsAreAttachedBeforeTheVersion() throws Exception {
         UsageReportingService service =
                 new UsageReportingService(true, endpoint, "test-key", "ci=true, env = staging", "1.2.3");
 
@@ -80,14 +80,14 @@ class UsageReportingServiceTest {
 
         assertTrue(arrived.await(5, TimeUnit.SECONDS), "startup event was not delivered");
         assertEquals("{\"application\":\"open-mc-server-infrastructure\",\"name\":\"startup\","
-                + "\"tags\":{\"version\":\"1.2.3\",\"ci\":\"true\",\"env\":\"staging\"}}", bodies.get(0));
+                + "\"tags\":{\"ci\":\"true\",\"env\":\"staging\",\"version\":\"1.2.3\"}}", bodies.get(0));
         service.close();
     }
 
     @Test
-    void startupTagsAreVersionThenConfiguredTags() {
+    void startupTagsAreTheConfiguredTagsTheClientAddsTheVersion() {
         UsageReportingService service = new UsageReportingService(false, endpoint, "k", "ci=true", "1.2.3");
-        assertEquals(Map.of("version", "1.2.3", "ci", "true"), service.startupTags());
+        assertEquals(Map.of("ci", "true"), service.startupTags());
         service.close();
     }
 
@@ -104,17 +104,27 @@ class UsageReportingServiceTest {
     }
 
     @Test
-    void versionIsNeverOverriddenByAConfiguredTag() {
+    void versionIsNeverOverriddenByAConfiguredTag() throws Exception {
         UsageReportingService service =
-                new UsageReportingService(false, endpoint, "k", "version=spoofed", "1.2.3");
-        assertEquals("1.2.3", service.startupTags().get("version"));
+                new UsageReportingService(true, endpoint, "k", "version=spoofed", "1.2.3");
+
+        service.reportStartup();
+
+        assertTrue(arrived.await(5, TimeUnit.SECONDS), "startup event was not delivered");
+        assertEquals("{\"application\":\"open-mc-server-infrastructure\",\"name\":\"startup\","
+                + "\"tags\":{\"version\":\"1.2.3\"}}", bodies.get(0));
         service.close();
     }
 
     @Test
-    void blankVersionIsReportedAsUnknown() {
-        UsageReportingService service = new UsageReportingService(false, endpoint, "k", "", " ");
-        assertEquals("unknown", service.startupTags().get("version"));
+    void blankVersionIsReportedAsUnknown() throws Exception {
+        UsageReportingService service = new UsageReportingService(true, endpoint, "k", "", " ");
+
+        service.reportStartup();
+
+        assertTrue(arrived.await(5, TimeUnit.SECONDS), "startup event was not delivered");
+        assertEquals("{\"application\":\"open-mc-server-infrastructure\",\"name\":\"startup\","
+                + "\"tags\":{\"version\":\"unknown\"}}", bodies.get(0));
         service.close();
     }
 
