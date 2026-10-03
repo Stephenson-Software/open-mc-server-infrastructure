@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Drives the startup report against a stub trace server on a loopback port (the JDK's own
@@ -56,6 +57,17 @@ class UsageReportingServiceTest {
     }
 
     @Test
+    void carriesARandomInstallationIdOnlyWhileReportingIsOn() {
+        UsageReportingService on = new UsageReportingService(true, endpoint, "test-key", "", "1.0");
+        UsageReportingService off = new UsageReportingService(false, endpoint, "test-key", "", "1.0");
+
+        assertNotNull(on.installId(), "an enabled client carries a random installation ID");
+        assertNull(off.installId(), "a disabled client never makes up an ID");
+        on.close();
+        off.close();
+    }
+
+    @Test
     void startupEventCarriesProgramNameAndVersion() throws Exception {
         UsageReportingService service = new UsageReportingService(true, endpoint, "test-key", "", "9.9.9-TEST");
         assertTrue(service.isEnabled());
@@ -65,7 +77,7 @@ class UsageReportingServiceTest {
         assertTrue(arrived.await(5, TimeUnit.SECONDS), "startup event was not delivered");
         assertEquals(1, bodies.size());
         assertEquals("{\"application\":\"open-mc-server-infrastructure\",\"name\":\"startup\","
-                + "\"tags\":{\"version\":\"9.9.9-TEST\"}}", bodies.get(0));
+                + "\"tags\":{\"version\":\"9.9.9-TEST\",\"install\":\"" + service.installId() + "\"}}", bodies.get(0));
         assertEquals("/api/metrics", paths.get(0));
         assertEquals("Bearer test-key", authorizations.get(0));
         service.close();
@@ -80,7 +92,7 @@ class UsageReportingServiceTest {
 
         assertTrue(arrived.await(5, TimeUnit.SECONDS), "startup event was not delivered");
         assertEquals("{\"application\":\"open-mc-server-infrastructure\",\"name\":\"startup\","
-                + "\"tags\":{\"ci\":\"true\",\"env\":\"staging\",\"version\":\"1.2.3\"}}", bodies.get(0));
+                + "\"tags\":{\"ci\":\"true\",\"env\":\"staging\",\"version\":\"1.2.3\",\"install\":\"" + service.installId() + "\"}}", bodies.get(0));
         service.close();
     }
 
@@ -112,7 +124,7 @@ class UsageReportingServiceTest {
 
         assertTrue(arrived.await(5, TimeUnit.SECONDS), "startup event was not delivered");
         assertEquals("{\"application\":\"open-mc-server-infrastructure\",\"name\":\"startup\","
-                + "\"tags\":{\"version\":\"1.2.3\"}}", bodies.get(0));
+                + "\"tags\":{\"version\":\"1.2.3\",\"install\":\"" + service.installId() + "\"}}", bodies.get(0));
         service.close();
     }
 
@@ -124,7 +136,7 @@ class UsageReportingServiceTest {
 
         assertTrue(arrived.await(5, TimeUnit.SECONDS), "startup event was not delivered");
         assertEquals("{\"application\":\"open-mc-server-infrastructure\",\"name\":\"startup\","
-                + "\"tags\":{\"version\":\"unknown\"}}", bodies.get(0));
+                + "\"tags\":{\"version\":\"unknown\",\"install\":\"" + service.installId() + "\"}}", bodies.get(0));
         service.close();
     }
 
