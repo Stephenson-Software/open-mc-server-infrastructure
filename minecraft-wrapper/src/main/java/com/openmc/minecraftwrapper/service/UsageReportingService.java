@@ -1,6 +1,7 @@
 package com.openmc.minecraftwrapper.service;
 
 import com.openmc.minecraftwrapper.trace.TraceClient;
+import com.openmc.minecraftwrapper.trace.TraceInstallId;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -76,8 +77,8 @@ public class UsageReportingService {
         this.endpointMissing = endpoint == null || endpoint.isBlank();
         this.client = buildClient(enabled, endpointMissing ? null : endpoint, key, this.version);
         if (client.isEnabled()) {
-            log.info("Usage reporting is on: {} sends its name and version (one startup event{}) to {}"
-                    + " - nothing about players or the server. Turn it off with USAGE_REPORTING_ENABLED=false"
+            log.info("Usage reporting is on: {} sends its name, version and a random installation ID"
+                    + " (one startup event{}) to {} - nothing about players or what happens on the server. Turn it off with USAGE_REPORTING_ENABLED=false"
                     + " in .env or the Helm values, or with TRACE_USAGE_REPORTING=off in the environment."
                     + " Details: {}",
                     APPLICATION,
@@ -126,6 +127,8 @@ public class UsageReportingService {
         return TraceClient.builder(endpointMissing ? "http://disabled.invalid" : endpoint, APPLICATION, version)
                 .key(key)
                 .enabled(enabled && !endpointMissing)
+                .installId(TraceInstallId.fromEnvironment())
+                .installIdFile(TraceInstallId.file(APPLICATION))
                 .logger(java.util.logging.Logger.getLogger(UsageReportingService.class.getName()))
                 .build();
     }
@@ -159,6 +162,11 @@ public class UsageReportingService {
     /** Whether a startup report will actually be sent (false when disabled or without a key). */
     public boolean isEnabled() {
         return client.isEnabled();
+    }
+
+    /** The random installation ID sent as the tag {@code install}, or null while reporting is off. */
+    public String installId() {
+        return client.installId();
     }
 
     /**
