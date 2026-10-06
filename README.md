@@ -1546,7 +1546,7 @@ should not mint credentials nobody requested.
 Usage reporting is on by default: once the `minecraft-wrapper` is up it sends **one
 `startup` event** — its name (`open-mc-server-infrastructure`), its version and any
 `USAGE_REPORTING_TAGS` you set (CI deployments tag `ci=true`) — to the project's usage
-service, [trace](https://github.com/Stephenson-Software/trace), at
+service, [trace](https://danielstephenson.dev/usage-reporting), at
 `https://trace.danielstephenson.dev`, so the maintainers can see how many OMCSI deployments
 exist and which versions they run. Nothing else is sent: nothing about players, worlds, IP
 addresses, the host, the operator account, or anything that happens on the server after it
@@ -1593,7 +1593,7 @@ helm upgrade omcsi helm/omcsi --namespace omcsi --reuse-values \
   --set minecraftWrapper.env.USAGE_REPORTING_ENABLED=false
 ```
 
-Details on what trace collects and why: https://github.com/Stephenson-Software/trace#usage-reporting
+Details on what trace collects and why: https://danielstephenson.dev/usage-reporting
 
 ## License
 
