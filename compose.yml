@@ -83,7 +83,7 @@ services:
       # On by default; USAGE_REPORTING_ENABLED=false or TRACE_USAGE_REPORTING=off turns
       # it off (DO_NOT_TRACK=1 too). The key default is the project's write-only program
       # key, so an unset .env still reports.
-      # Details: https://github.com/Stephenson-Software/trace#usage-reporting
+      # Details: https://danielstephenson.dev/usage-reporting
       - USAGE_REPORTING_ENABLED=${USAGE_REPORTING_ENABLED:-true}
       - USAGE_REPORTING_ENDPOINT=${USAGE_REPORTING_ENDPOINT:-https://trace.danielstephenson.dev}
       - USAGE_REPORTING_KEY=${USAGE_REPORTING_KEY:-9Q2Q3NTQCZbqdMhF-8-rrMOm_N4e47JqT0VnRt2t6_A}

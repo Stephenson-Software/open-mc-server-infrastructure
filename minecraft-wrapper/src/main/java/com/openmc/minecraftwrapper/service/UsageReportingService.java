@@ -19,7 +19,7 @@ import java.util.Map;
 
 /**
  * Reports that this OMCSI deployment started to the trace usage service
- * (https://github.com/Stephenson-Software/trace), so the project can see how many
+ * (https://danielstephenson.dev/usage-reporting), so the project can see how many
  * deployments are running and on which version.
  *
  * <p>Exactly one event is sent, {@code startup}, once the wrapper is up. It carries the
@@ -39,7 +39,7 @@ import java.util.Map;
  * which the client checks before anything this service passes it. Because other people
  * deploy this stack, one INFO line is logged on every start saying that reporting is on and
  * how to turn it off, or that it is off and why. Details:
- * https://github.com/Stephenson-Software/trace#usage-reporting
+ * https://danielstephenson.dev/usage-reporting
  */
 @Service
 public class UsageReportingService {
@@ -52,7 +52,7 @@ public class UsageReportingService {
     static final String VERSION_TAG = "version";
     static final String UNKNOWN_VERSION = "unknown";
     /** The public page describing what trace collects and every way to turn it off. */
-    static final String DETAILS_URL = "https://github.com/Stephenson-Software/trace#usage-reporting";
+    static final String DETAILS_URL = "https://danielstephenson.dev/usage-reporting";
     /** Logged reason when {@code USAGE_REPORTING_ENDPOINT} is blank, which the client itself rejects. */
     static final String REASON_NO_ENDPOINT = "no endpoint";
 

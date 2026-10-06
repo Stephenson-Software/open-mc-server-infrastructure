@@ -580,7 +580,7 @@ class TraceClientTest {
         // Assert
         assertTrue(Files.exists(file), "plugins/trace/config.yml should have been created");
         String expected = "# Server-wide switch for usage reporting by plugins that report to trace\n"
-                + "# (https://github.com/Stephenson-Software/trace#usage-reporting).\n"
+                + "# (https://danielstephenson.dev/usage-reporting).\n"
                 + "# Set enabled to false and every such plugin on this server stops reporting,\n"
                 + "# regardless of its own usage-reporting.enabled setting. Plugins never turn\n"
                 + "# this back on.\n"

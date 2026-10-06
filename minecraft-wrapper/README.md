@@ -144,7 +144,7 @@ usage-reporting.tags=
 - `ALERTS_SERVER_START`: Enable server start alerts (default: `true`)
 - `ALERTS_SERVER_STOP`: Enable server stop alerts (default: `true`)
 - `ALERTS_SERVER_CRASH`: Enable server crash alerts (default: `true`)
-- `USAGE_REPORTING_ENABLED`: Send one `startup` event (program name, version and `USAGE_REPORTING_TAGS` only) to the trace usage service once the wrapper is up. Logged as one `INFO` line on every start; set to `false` to turn it off (default: `true`). Details: https://github.com/Stephenson-Software/trace#usage-reporting
+- `USAGE_REPORTING_ENABLED`: Send one `startup` event (program name, version and `USAGE_REPORTING_TAGS` only) to the trace usage service once the wrapper is up. Logged as one `INFO` line on every start; set to `false` to turn it off (default: `true`). Details: https://danielstephenson.dev/usage-reporting
 - `USAGE_REPORTING_ENDPOINT`: Where that event goes (default: `https://trace.danielstephenson.dev`)
 - `USAGE_REPORTING_KEY`: Program key (default: the project's bundled write-only key)
 - `USAGE_REPORTING_TAGS`: Comma-separated `k=v` pairs attached to the event, e.g. `ci=true`; `version` is reserved (default: empty)
