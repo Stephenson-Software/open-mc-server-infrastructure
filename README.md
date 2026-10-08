@@ -1678,7 +1678,7 @@ Before submitting changes, you can run the same validation checks locally:
 ```
 
 This mirrors the CI pipeline to catch issues early: shell script syntax and
-ShellCheck linting, Docker Compose configuration, the nginx route configuration
+ShellCheck linting, Docker Compose configuration, the nginx configuration
 test, environment and documentation checks, `helm lint`, `helm unittest`,
 Terraform formatting and validation for all four targets, the Gradle test
 suite for every module, and the Python client's test suite. Checks whose tool (ShellCheck, Helm, the helm-unittest

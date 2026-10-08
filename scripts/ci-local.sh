@@ -79,15 +79,15 @@ else
     skip "docker compose config (no reachable Docker daemon)"
 fi
 
-echo "🔀 Checking nginx route configuration..."
+echo "🔀 Checking nginx configuration..."
 # Mirrors the nginx-config-test job in .github/workflows/ci.yml. It builds the
 # nginx image and asserts the configuration nginx actually resolves, which no
 # other check covers on the Docker Compose target.
 if have_docker; then
-    ./scripts/test-nginx-bluemap-route.sh
-    echo "✅ nginx route configuration passed"
+    ./scripts/test-nginx-config.sh
+    echo "✅ nginx configuration passed"
 else
-    skip "nginx route configuration test (no reachable Docker daemon)"
+    skip "nginx configuration test (no reachable Docker daemon)"
 fi
 
 echo "⚙️ Checking environment configuration..."
