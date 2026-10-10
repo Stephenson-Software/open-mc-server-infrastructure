@@ -460,11 +460,11 @@ jobs:
     # render, or a route that survives being disabled would pass CI unnoticed.
     # The Kubernetes side of the same routes is covered by
     # helm/omcsi/tests/nginx_test.yaml in the Helm Unit Tests job.
-    - name: Test nginx BlueMap route
+    - name: Test nginx configuration
       run: |
-        echo "🔀 Testing nginx route configuration..."
-        ./scripts/test-nginx-bluemap-route.sh
-        echo "✓ nginx route configuration verified"
+        echo "🔀 Testing nginx configuration..."
+        ./scripts/test-nginx-config.sh
+        echo "✓ nginx configuration verified"
 
   secret-reference-test:
     name: Secret Reference Test

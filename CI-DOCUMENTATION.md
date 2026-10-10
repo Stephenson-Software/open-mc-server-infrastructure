@@ -107,7 +107,7 @@ Performs security vulnerability scanning using Trivy:
 
 ### 6. nginx Configuration Test (`nginx-config-test`)
 
-Builds the `nginx/` image and runs `scripts/test-nginx-bluemap-route.sh`
+Builds the `nginx/` image and runs `scripts/test-nginx-config.sh`
 against it. The script asks nginx for the configuration it actually resolves
 (`nginx -T`, includes and all) in four states — BlueMap disabled, enabled at the
 default path, enabled at a custom path, and disabled again after having been
@@ -220,7 +220,7 @@ It also runs the Python client's test suite, off `PYTHONPATH=src` rather than
 installing the package, so a local run never writes to your Python environment.
 
 Alongside those, it runs ShellCheck, `helm lint`, `helm unittest`,
-`scripts/test-nginx-bluemap-route.sh`, and
+`scripts/test-nginx-config.sh`, and
 `terraform fmt -check`/`init -backend=false`/`validate` for the `linode`, `aws`,
 `existing-cluster`, and `hetzner` targets. ShellCheck, Helm, the helm-unittest
 plugin, Terraform, and a reachable Docker daemon are all optional: a check whose
@@ -395,7 +395,7 @@ so a failure is either a build failure or a route assertion.
 - A failed upload-limit assertion points at the `sed` substitutions in
   `nginx/entrypoint.sh`, or at the `# upload` comments in `nginx/nginx.conf`
   that the timeout substitution is anchored on
-- Reproduce the whole job locally with `scripts/test-nginx-bluemap-route.sh`
+- Reproduce the whole job locally with `scripts/test-nginx-config.sh`
   (also run by `scripts/ci-local.sh` when a Docker daemon is reachable)
 - The Kubernetes side of the same routes is covered by
   `helm/omcsi/tests/nginx_test.yaml` under `helm unittest`, so a route that

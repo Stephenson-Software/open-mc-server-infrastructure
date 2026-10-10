@@ -22,7 +22,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-IMAGE="test-omcsi-nginx-bluemap"
+IMAGE="test-omcsi-nginx-config"
 
 TESTS=0
 PASSED=0

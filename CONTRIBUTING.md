@@ -40,7 +40,7 @@ Before submitting a pull request, run the local CI validation script:
 ```
 
 It covers shell script syntax and ShellCheck linting, Docker Compose
-configuration, the nginx route configuration test, environment and documentation
+configuration, the nginx configuration test, environment and documentation
 checks, `helm lint`, `helm unittest`, `terraform fmt`/`validate` for all four
 Terraform targets, the Gradle test suite for every module, and the Python
 client's unit tests.
