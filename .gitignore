@@ -51,3 +51,4 @@ __pycache__/
 .eggs/
 clients/python/build/
 clients/python/dist/
+plugin-selection/selection.json

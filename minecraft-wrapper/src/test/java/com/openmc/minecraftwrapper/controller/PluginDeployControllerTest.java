@@ -16,9 +16,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.io.IOException;
+import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -186,5 +188,36 @@ class PluginDeployControllerTest {
                 .andExpect(status().isInternalServerError());
 
         verify(alertService, times(1)).sendPluginDeployFailureAlert(eq("MyPlugin.jar"), anyString(), isNull(), isNull());
+    }
+
+    // ── applied report ────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("Should serve the plugin selection report without a token")
+    void shouldServeAppliedReport() throws Exception {
+        String report = "{\"plugins\":{\"fiefs\":\"installed\"}}";
+        when(pluginDeployService.readAppliedReport()).thenReturn(Optional.of(report));
+
+        mockMvc.perform(get("/api/plugins/applied"))
+                .andExpect(status().isOk())
+                .andExpect(content().json(report));
+    }
+
+    @Test
+    @DisplayName("Should return 404 when no plugin selection has been reconciled")
+    void shouldReturnNotFoundWithoutAppliedReport() throws Exception {
+        when(pluginDeployService.readAppliedReport()).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/api/plugins/applied"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("Should return 500 when the plugin selection report cannot be read")
+    void shouldReturnServerErrorWhenAppliedReportUnreadable() throws Exception {
+        when(pluginDeployService.readAppliedReport()).thenThrow(new IOException("disk"));
+
+        mockMvc.perform(get("/api/plugins/applied"))
+                .andExpect(status().isInternalServerError());
     }
 }

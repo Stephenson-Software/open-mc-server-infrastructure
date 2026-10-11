@@ -480,3 +480,34 @@ tests:
             name: TRACE_USAGE_REPORTING
             value: "off"
         documentIndex: 0
+
+  - it: mounts the optional <release>-plugins ConfigMap read-only for the plugin selection
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: plugin-selection
+            configMap:
+              name: RELEASE-NAME-plugins
+              optional: true
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: plugin-selection
+            mountPath: /etc/omcsi/plugins
+            readOnly: true
+        documentIndex: 0
+
+  - it: takes the plugin selection ConfigMap name from values
+    set:
+      minecraftWrapper.pluginSelection.configMapName: my-selection
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: plugin-selection
+            configMap:
+              name: my-selection
+              optional: true
+        documentIndex: 0

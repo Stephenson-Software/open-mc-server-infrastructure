@@ -191,6 +191,9 @@ spec:
               mountPath: /mcserver
             - name: tmp
               mountPath: /tmp
+            - name: plugin-selection
+              mountPath: /etc/omcsi/plugins
+              readOnly: true
       volumes:
         - name: mcserver
           {{- if .Values.persistence.mcserver.enabled }}
@@ -201,6 +204,10 @@ spec:
           {{- end }}
         - name: tmp
           emptyDir: {}
+        - name: plugin-selection
+          configMap:
+            name: {{ .Values.minecraftWrapper.pluginSelection.configMapName | default (printf "%s-plugins" .Release.Name) }}
+            optional: true
 ---
 # External Service – exposes only the Minecraft game port
 apiVersion: v1

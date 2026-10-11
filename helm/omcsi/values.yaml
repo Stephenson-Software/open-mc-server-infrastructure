@@ -65,6 +65,13 @@ minecraftWrapper:
     rconPort: 25575
     bluemapPort: 8100
     wrapperPort: 8092
+  # Optional plugin selection, reconciled into plugins/ at every container start
+  # by reconcile_plugin_selection in resources/post-create.sh. The ConfigMap
+  # (key selection.json) is written by an operator platform, not by this chart,
+  # and is mounted with optional: true, so a release without one is unaffected.
+  pluginSelection:
+    # Defaults to <release>-plugins.
+    configMapName: ""
   env:
     MINECRAFT_VERSION: "26.2"
     OPERATOR_UUID: "YOUR_UUID_HERE"

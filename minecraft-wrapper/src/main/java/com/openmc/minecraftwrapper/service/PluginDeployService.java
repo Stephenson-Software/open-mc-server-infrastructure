@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -29,8 +30,25 @@ public class PluginDeployService {
     // ZIP magic bytes: PK\x03\x04
     private static final byte[] ZIP_MAGIC = {0x50, 0x4B, 0x03, 0x04};
 
+    // Written by reconcile_plugin_selection in resources/post-create.sh at container start.
+    static final String APPLIED_REPORT_FILENAME = ".omcsi-applied.json";
+
     @Value("${plugins.directory:/mcserver/plugins}")
     private String pluginsDirectory;
+
+    /**
+     * The plugin selection report from the last container start, as the JSON the
+     * boot script wrote, or empty when no selection has been reconciled.
+     *
+     * @throws IOException if the report exists but cannot be read
+     */
+    public Optional<String> readAppliedReport() throws IOException {
+        Path report = Paths.get(pluginsDirectory).resolve(APPLIED_REPORT_FILENAME);
+        if (!Files.isRegularFile(report)) {
+            return Optional.empty();
+        }
+        return Optional.of(Files.readString(report));
+    }
 
     /**
      * Deploy a plugin JAR with the provided file, creating it if it does not exist or

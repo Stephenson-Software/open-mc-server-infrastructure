@@ -192,6 +192,185 @@ install_default_plugins() {
     done
 }
 
+# The plugin selection an operator platform wants on this server, if any:
+#   {"version": 1, "plugins": [{"slug": "...", "filename": "X-1.0.jar", "url": "https://..."}]}
+# On Kubernetes it is the optional <release>-plugins ConfigMap; with no file,
+# reconcile_plugin_selection does nothing.
+PLUGIN_SELECTION_FILE="${PLUGIN_SELECTION_FILE:-/etc/omcsi/plugins/selection.json}"
+
+# Function: Print the name: declared in a jar's plugin.yml, or nothing when the
+# jar has none (not a Bukkit plugin, or not a zip at all).
+plugin_name_of() {
+    # Always succeeds: under pipefail an unreadable jar must not end the boot.
+    { unzip -p "$1" plugin.yml 2>/dev/null || true; } \
+        | tr -d '\r' \
+        | sed -n -e '/^name:/{' -e 's/^name:[[:space:]]*//' -e 's/[[:space:]]*$//' \
+            -e "s/^[\"']//" -e "s/[\"']\$//" -e 'p' -e 'q' -e '}' \
+        || true
+}
+
+# Function: Reconcile plugins/ against PLUGIN_SELECTION_FILE.
+#
+# Jars are identified by the name in their plugin.yml, never by filename: an
+# in-game updater (/dpm update) replaces a jar under a new filename, and a
+# filename match would put the old version back beside it, which Bukkit
+# refuses to load. plugins/.omcsi-managed.json records which plugin each
+# selected slug installed or adopted; only those are ever removed. Jars the
+# manifest does not name are never touched, and plugin data folders
+# (plugins/<Name>/) are never deleted, so a reinstall finds its data again.
+#
+# Per-slug outcomes go to plugins/.omcsi-applied.json for the wrapper to serve.
+# A failure leaves the previous state in place, logs and alerts; it never stops
+# the server from booting.
+reconcile_plugin_selection() {
+    if [ ! -f "$PLUGIN_SELECTION_FILE" ]; then
+        return 0
+    fi
+    local tool
+    for tool in jq unzip; do
+        if ! command -v "$tool" >/dev/null 2>&1; then
+            log "WARNING: $tool is not installed; skipping plugin selection."
+            return 0
+        fi
+    done
+    if ! jq -e '.version == 1 and (.plugins | type == "array")' "$PLUGIN_SELECTION_FILE" >/dev/null 2>&1; then
+        log "WARNING: $PLUGIN_SELECTION_FILE is not a version 1 plugin selection; skipping."
+        send_alert "Plugin Selection Invalid" "The plugin selection could not be read; plugins were left unchanged." "WARNING" "ALERTS_CONFIG_WARNING"
+        return 0
+    fi
+
+    local plugins_dir="$SERVER_DIR/plugins"
+    local manifest="$plugins_dir/.omcsi-managed.json"
+    local applied="$plugins_dir/.omcsi-applied.json"
+    mkdir -p "$plugins_dir"
+
+    # A missing or unreadable manifest is an empty one: nothing is known to be
+    # managed, so nothing can be removed. That is the safe direction to fail.
+    local managed='{}'
+    if [ -f "$manifest" ]; then
+        if jq -e 'type == "object"' "$manifest" >/dev/null 2>&1; then
+            managed="$(cat "$manifest")"
+        else
+            log "WARNING: $manifest is unreadable; treating no plugins as managed."
+        fi
+    fi
+
+    # Index every jar by its plugin name.
+    local -A name_of_jar=()
+    local jar
+    for jar in "$plugins_dir"/*.jar; do
+        [ -f "$jar" ] || continue
+        name_of_jar["$jar"]="$(plugin_name_of "$jar")"
+    done
+
+    local outcomes='{}' failures=0 slug name filename url
+
+    # Removals: managed slugs that are no longer selected.
+    local selected_slugs
+    selected_slugs="$(jq -c '[.plugins[].slug]' "$PLUGIN_SELECTION_FILE")"
+    while IFS=$'\t' read -r slug name; do
+        [ -n "$slug" ] || continue
+        for jar in "${!name_of_jar[@]}"; do
+            if [ -n "$name" ] && [ "${name_of_jar[$jar]}" = "$name" ]; then
+                rm -f "$jar"
+                unset 'name_of_jar[$jar]'
+                log "Removed plugin $name ($(basename "$jar")); its data folder is kept."
+            fi
+        done
+        managed="$(jq --arg s "$slug" 'del(.[$s])' <<< "$managed")"
+        outcomes="$(jq --arg s "$slug" '.[$s] = "removed"' <<< "$outcomes")"
+    done < <(jq -r --argjson sel "$selected_slugs" \
+        'to_entries[] | select(.key as $k | $sel | index($k) | not) | [.key, (.value.name // "")] | @tsv' <<< "$managed")
+
+    # Installs: selected slugs whose plugin is not on disk.
+    while IFS=$'\t' read -r slug filename url; do
+        if ! [[ "$slug" =~ ^[a-z0-9][a-z0-9._-]*$ ]] || ! [[ "$filename" =~ ^[A-Za-z0-9][A-Za-z0-9._+-]*\.jar$ ]] || [ -z "$url" ]; then
+            log "WARNING: skipping invalid plugin selection entry: ${slug:-<no slug>}"
+            outcomes="$(jq --arg s "${slug:-?}" '.[$s] = "failed: invalid entry"' <<< "$outcomes")"
+            failures=$((failures + 1))
+            continue
+        fi
+
+        # Already managed and present, under whatever filename it has now.
+        name="$(jq -r --arg s "$slug" '.[$s].name // ""' <<< "$managed")"
+        local present=""
+        if [ -n "$name" ]; then
+            for jar in "${!name_of_jar[@]}"; do
+                if [ "${name_of_jar[$jar]}" = "$name" ]; then present="$jar"; break; fi
+            done
+        fi
+        if [ -n "$present" ]; then
+            managed="$(jq --arg s "$slug" --arg f "$(basename "$present")" '.[$s].filename = $f' <<< "$managed")"
+            outcomes="$(jq --arg s "$slug" '.[$s] = "present"' <<< "$outcomes")"
+            continue
+        fi
+
+        # The selected filename is already there (a default plugin, say): adopt
+        # it without downloading.
+        local candidate="" candidate_name=""
+        if [ -f "$plugins_dir/$filename" ] && [ -n "${name_of_jar[$plugins_dir/$filename]:-}" ]; then
+            candidate_name="${name_of_jar[$plugins_dir/$filename]}"
+        else
+            candidate="$(mktemp "$plugins_dir/.incoming-XXXXXX")"
+            if ! curl -fsSL --max-time 120 -o "$candidate" "$url"; then
+                rm -f "$candidate"
+                log "WARNING: failed to download plugin $slug from $url"
+                outcomes="$(jq --arg s "$slug" '.[$s] = "failed: download"' <<< "$outcomes")"
+                failures=$((failures + 1))
+                continue
+            fi
+            candidate_name="$(plugin_name_of "$candidate")"
+            if [ -z "$candidate_name" ]; then
+                rm -f "$candidate"
+                log "WARNING: $url is not a Bukkit plugin (no plugin.yml name)"
+                outcomes="$(jq --arg s "$slug" '.[$s] = "failed: no plugin.yml"' <<< "$outcomes")"
+                failures=$((failures + 1))
+                continue
+            fi
+        fi
+
+        # The plugin may already be installed under another filename: by hand,
+        # or by an in-game updater. Adopt that jar rather than add a second.
+        present=""
+        for jar in "${!name_of_jar[@]}"; do
+            if [ "${name_of_jar[$jar]}" = "$candidate_name" ]; then present="$jar"; break; fi
+        done
+        if [ -n "$present" ]; then
+            [ -z "$candidate" ] || rm -f "$candidate"
+            managed="$(jq --arg s "$slug" --arg n "$candidate_name" --arg f "$(basename "$present")" \
+                '.[$s] = {name: $n, filename: $f}' <<< "$managed")"
+            outcomes="$(jq --arg s "$slug" '.[$s] = "adopted"' <<< "$outcomes")"
+            log "Adopted plugin $candidate_name ($(basename "$present")) for $slug."
+            continue
+        fi
+
+        if [ -f "$plugins_dir/$filename" ]; then
+            rm -f "$candidate"
+            log "WARNING: $filename already exists and is not plugin $candidate_name; leaving it alone."
+            outcomes="$(jq --arg s "$slug" '.[$s] = "failed: filename taken"' <<< "$outcomes")"
+            failures=$((failures + 1))
+            continue
+        fi
+        mv "$candidate" "$plugins_dir/$filename"
+        name_of_jar["$plugins_dir/$filename"]="$candidate_name"
+        managed="$(jq --arg s "$slug" --arg n "$candidate_name" --arg f "$filename" \
+            '.[$s] = {name: $n, filename: $f}' <<< "$managed")"
+        outcomes="$(jq --arg s "$slug" '.[$s] = "installed"' <<< "$outcomes")"
+        log "Installed plugin $candidate_name ($filename) for $slug."
+    done < <(jq -r '.plugins[] | [(.slug // ""), (.filename // ""), (.url // "")] | @tsv' "$PLUGIN_SELECTION_FILE")
+
+    # Write both files atomically: a half-written manifest would read as empty.
+    local selection_hash
+    selection_hash="$(sha256sum "$PLUGIN_SELECTION_FILE" | cut -d' ' -f1)"
+    printf '%s\n' "$managed" > "$manifest.tmp" && mv "$manifest.tmp" "$manifest"
+    jq -n --arg h "$selection_hash" --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson o "$outcomes" \
+        '{selection_sha256: $h, applied_at: $t, plugins: $o}' > "$applied.tmp" && mv "$applied.tmp" "$applied"
+
+    if [ "$failures" -gt 0 ]; then
+        send_alert "Plugin Selection Incomplete" "$failures selected plugin(s) could not be installed; see the server setup log." "WARNING" "ALERTS_CONFIG_WARNING"
+    fi
+}
+
 # Function: Setup ops.json file
 setup_ops_file() {
     # Check if ops.json already exists - if so, preserve it to maintain runtime op changes
@@ -347,6 +526,7 @@ log "Running server setup script..."
 validate_environment
 setup_server
 install_default_plugins
+reconcile_plugin_selection
 setup_ops_file
 accept_eula
 create_server_properties
