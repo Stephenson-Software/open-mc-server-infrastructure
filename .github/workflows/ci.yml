@@ -506,6 +506,18 @@ jobs:
         ./scripts/test-jar-replacement.sh
         echo "✓ server JAR replacement verified"
 
+    # Exercises reconcile_plugin_selection() against fixture jars. The behaviours
+    # protected are the ones a server's data depends on: jars are matched by their
+    # plugin.yml name, so an in-game update or a hand upload is adopted rather than
+    # duplicated (Bukkit refuses two jars with one plugin name); only jars the
+    # selection installed are removed; a removed plugin's data folder is kept; and
+    # no failure stops the boot.
+    - name: Test plugin selection reconciliation
+      run: |
+        echo "🧩 Testing plugin selection reconciliation..."
+        ./scripts/test-plugin-selection.sh
+        echo "✓ plugin selection reconciliation verified"
+
     # The image picks the JDK for BuildTools and for the server from MINECRAFT_VERSION; a
     # wrong pick only shows up as a failed build or first start, so the boundaries are pinned here.
     - name: Test JDK selection per Minecraft version

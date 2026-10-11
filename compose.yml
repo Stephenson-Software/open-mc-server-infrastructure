@@ -16,6 +16,9 @@ services:
     volumes:
       - mcserver:/mcserver
       - ./deposit-box:/deposit-box
+      # Optional plugin selection: put a selection.json here (see
+      # plugin-selection/README.md). An empty directory changes nothing.
+      - ./plugin-selection:/etc/omcsi/plugins:ro
     depends_on:
       alert-manager:
         condition: service_healthy

@@ -11,6 +11,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -161,5 +162,22 @@ class PluginDeployServiceTest {
 
         assertThrows(IOException.class,
                 () -> pluginDeployService.replacePlugin("MyPlugin.jar", newJar));
+    }
+
+    // ── readAppliedReport ─────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("Should return the plugin selection report written at boot")
+    void shouldReturnAppliedReport() throws Exception {
+        String report = "{\"selection_sha256\":\"abc\",\"plugins\":{\"fiefs\":\"installed\"}}";
+        Files.writeString(tempDir.resolve(".omcsi-applied.json"), report);
+
+        assertEquals(Optional.of(report), pluginDeployService.readAppliedReport());
+    }
+
+    @Test
+    @DisplayName("Should return empty when no plugin selection has been reconciled")
+    void shouldReturnEmptyWithoutAppliedReport() throws Exception {
+        assertEquals(Optional.empty(), pluginDeployService.readAppliedReport());
     }
 }

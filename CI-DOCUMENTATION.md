@@ -158,6 +158,17 @@ No other job reaches this code path. Every other job starts from an empty server
 directory, which takes the first branch of `setup_server()` and never touches
 JAR replacement at all.
 
+The same job then runs `scripts/test-plugin-selection.sh`, which extracts
+`reconcile_plugin_selection()` and exercises it against fixture jars served over
+`file://` URLs. The behaviours protected are the ones a server's data depends on:
+
+- Jars are matched by the `name` in their `plugin.yml`, so a jar renamed by an in-game
+  update or uploaded by hand is adopted rather than duplicated. Bukkit refuses to load
+  two jars that declare the same plugin name.
+- Only jars the selection installed or adopted are ever removed.
+- A removed plugin's data folder is kept.
+- A failed download, a non-plugin download or an invalid selection never stops the boot.
+
 ### 9. Python Client Tests (`python-client-test`)
 
 Installs `clients/python` with `pip install -e` and runs its `unittest` suite

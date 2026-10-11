@@ -7,6 +7,7 @@ import com.openmc.minecraftwrapper.util.BearerTokenAuthenticator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -78,6 +79,26 @@ public class PluginDeployController {
             webAppNotificationService.notifyDeploymentFailure(pluginName, e.getMessage(), branch, repoUrl);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("Failed to deploy plugin");
+        }
+    }
+
+    /**
+     * The outcome of the plugin selection reconciled at the last container start
+     * ({@code plugins/.omcsi-applied.json}): the selection's SHA-256 and a per-plugin
+     * outcome. Read-only and unauthenticated, like {@code /api/server/status}; the
+     * wrapper API is reachable only inside the cluster.
+     *
+     * @return 200 with the report, 404 when no selection has been reconciled, 500 on I/O error
+     */
+    @GetMapping(value = "/applied", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<String> applied() {
+        try {
+            return pluginDeployService.readAppliedReport()
+                    .map(ResponseEntity::ok)
+                    .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (IOException e) {
+            log.error("Failed to read the plugin selection report: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
