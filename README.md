@@ -105,7 +105,7 @@ helm uninstall omcsi --namespace omcsi
 
 The chart is also published as an OCI artifact on every `helm/omcsi/Chart.yaml` version bump (see [`.github/workflows/helm-publish.yml`](.github/workflows/helm-publish.yml)), so it can be installed directly without a local checkout:
 ```bash
-helm install omcsi oci://ghcr.io/dmccoystephenson/charts/omcsi --version 0.1.0 \
+helm install omcsi oci://ghcr.io/stephenson-software/charts/omcsi --version 0.2.0 \
   --namespace omcsi --create-namespace \
   --set secrets.rconPassword=changeme \
   --set secrets.adminPassword=strongpassword
