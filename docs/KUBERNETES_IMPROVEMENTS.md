@@ -134,8 +134,8 @@ All three PDBs use `policy/v1` (stable since Kubernetes 1.21).
 **Problem:** The chart is only available from the Git repository. Operators must clone the repo or reference the chart path directly.
 
 **Implemented in PR #224:**
-- Added `.github/workflows/helm-publish.yml`, which lints, packages, and pushes the chart to `oci://ghcr.io/dmccoystephenson/charts/omcsi` whenever `helm/omcsi/Chart.yaml` changes on `main` (or via manual `workflow_dispatch`).
-- README documents `helm install omcsi oci://ghcr.io/dmccoystephenson/charts/omcsi --version <chart-version>` as an alternative to cloning the repo.
+- Added `.github/workflows/helm-publish.yml`, which lints, packages, and pushes the chart to `oci://ghcr.io/stephenson-software/charts/omcsi` (the repository owner, lowercased because GHCR rejects uppercase paths) whenever `helm/omcsi/Chart.yaml` changes on `main` (or via manual `workflow_dispatch`).
+- README documents `helm install omcsi oci://ghcr.io/stephenson-software/charts/omcsi --version <chart-version>` as an alternative to cloning the repo.
 - The local-path install (`./helm/omcsi`) continues to work unchanged for all deployment flows.
 - The chart is only republished when `Chart.yaml`'s `version` is bumped, so template changes must be accompanied by a version bump to reach the registry.
 

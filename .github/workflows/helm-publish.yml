@@ -37,8 +37,16 @@ jobs:
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "path=/tmp/helm-package/omcsi-${version}.tgz" >> "$GITHUB_OUTPUT"
 
+      # GHCR rejects repository paths containing uppercase characters, and the
+      # owner (Stephenson-Software) has some, so lowercase it before use.
+      - name: Compute registry owner
+        id: owner
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: echo "lower=${OWNER,,}" >> "$GITHUB_OUTPUT"
+
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io --username ${{ github.actor }} --password-stdin
 
       - name: Push chart to GHCR
-        run: helm push "${{ steps.package.outputs.path }}" oci://ghcr.io/${{ github.repository_owner }}/charts
+        run: helm push "${{ steps.package.outputs.path }}" oci://ghcr.io/${{ steps.owner.outputs.lower }}/charts
