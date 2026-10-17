@@ -56,7 +56,7 @@ echo "🔍 Linting shell scripts..."
 if have shellcheck; then
     # Keep this file list in sync with the "Validate shell scripts" step in
     # .github/workflows/ci.yml.
-    shellcheck up.sh down.sh upgrade.sh rollback.sh trigger-backup.sh resources/post-create.sh scripts/*.sh
+    shellcheck up.sh down.sh upgrade.sh rollback.sh trigger-backup.sh resources/post-create.sh resources/java-for-minecraft.sh scripts/*.sh
     echo "✅ ShellCheck passed"
 else
     skip "ShellCheck (shellcheck is not installed)"

@@ -21,8 +21,8 @@ The main per-PR validation job. It runs the following steps in order:
 #### Shell Script Validation
 - **Syntax Checking** (`bash -n`): `up.sh`, `down.sh`, `upgrade.sh`,
   `rollback.sh`, `trigger-backup.sh`, `resources/post-create.sh`.
-- **ShellCheck Linting**: the same six scripts plus everything under
-  `scripts/*.sh`.
+- **ShellCheck Linting**: the same six scripts plus
+  `resources/java-for-minecraft.sh` and everything under `scripts/*.sh`.
 
 #### Docker Configuration Validation
 - **Dockerfile Validation**: verifies the root `Dockerfile` exists and contains
@@ -168,6 +168,15 @@ The same job then runs `scripts/test-plugin-selection.sh`, which extracts
 - Only jars the selection installed or adopted are ever removed.
 - A removed plugin's data folder is kept.
 - A failed download, a non-plugin download or an invalid selection never stops the boot.
+
+Finally, it runs `scripts/test-java-for-minecraft.sh`, which points
+`resources/java-for-minecraft.sh` at a fixture JVM directory and checks the JDK
+it picks for each `MINECRAFT_VERSION`. BuildTools and the server both refuse a
+JDK outside the range a version supports, so a wrong pick only shows up as a
+failed image build or first start. The test pins the boundaries: 17 below
+1.20.5, 21 from 1.20.5, and 25 for 26.x. Versions it cannot parse or that need a
+JDK older than 17 are refused, and a JDK missing from the image is reported
+rather than replaced by another.
 
 ### 9. Python Client Tests (`python-client-test`)
 
