@@ -240,10 +240,14 @@ It also runs the Python client's test suite, off `PYTHONPATH=src` rather than
 installing the package, so a local run never writes to your Python environment.
 
 Alongside those, it runs ShellCheck, `helm lint`, `helm unittest`,
-`scripts/test-nginx-config.sh`, and
+`scripts/test-nginx-config.sh`, the shell fixture tests from the Secret Reference
+Test and Server JAR Replacement Test jobs (`scripts/test-secret-references.sh`,
+`scripts/test-jar-replacement.sh`, `scripts/test-plugin-selection.sh`,
+`scripts/test-java-for-minecraft.sh`), and
 `terraform fmt -check`/`init -backend=false`/`validate` for the `linode`, `aws`,
 `existing-cluster`, and `hetzner` targets. ShellCheck, Helm, the helm-unittest
-plugin, Terraform, and a reachable Docker daemon are all optional: a check whose
+plugin, Terraform, a reachable Docker daemon, and the `jq`/`unzip`/`curl`/`python3`
+set the plugin selection test needs are all optional: a check whose
 tool is unavailable is skipped with a warning and repeated in the summary
 printed at the end of the run. Skipped checks are still enforced by CI, so a
 local run with skips is a weaker signal than a green pipeline.

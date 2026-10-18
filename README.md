@@ -1679,10 +1679,13 @@ Before submitting changes, you can run the same validation checks locally:
 
 This mirrors the CI pipeline to catch issues early: shell script syntax and
 ShellCheck linting, Docker Compose configuration, the nginx configuration
-test, environment and documentation checks, `helm lint`, `helm unittest`,
-Terraform formatting and validation for all four targets, the Gradle test
-suite for every module, and the Python client's test suite. Checks whose tool (ShellCheck, Helm, the helm-unittest
-plugin, Terraform, a reachable Docker daemon) is unavailable locally are skipped
+test, the shell fixture tests for secret references, server JAR replacement,
+plugin selection, and JDK selection, environment and documentation checks,
+`helm lint`, `helm unittest`, Terraform formatting and validation for all four
+targets, the Gradle test suite for every module, and the Python client's test
+suite. Checks whose tool (ShellCheck, Helm, the helm-unittest plugin, Terraform,
+a reachable Docker daemon, or the `jq`/`unzip`/`curl`/`python3` set the plugin
+selection test needs) is unavailable locally are skipped
 with a warning and listed in the summary at the end of the run.
 
 ### CI Pipeline Status
