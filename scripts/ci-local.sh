@@ -90,6 +90,30 @@ else
     skip "nginx configuration test (no reachable Docker daemon)"
 fi
 
+echo "🔐 Checking secret reference resolution..."
+# Mirrors the secret-reference-test job in .github/workflows/ci.yml.
+./scripts/test-secret-references.sh
+echo "✅ Secret reference resolution passed"
+
+# The next three mirror the jar-replacement-test job in .github/workflows/ci.yml.
+echo "📦 Checking server JAR replacement..."
+./scripts/test-jar-replacement.sh
+echo "✅ Server JAR replacement passed"
+
+echo "🧩 Checking plugin selection reconciliation..."
+# reconcile_plugin_selection() needs jq, unzip and curl, and the test builds its
+# fixture jars with python3.
+if have jq && have unzip && have curl && have python3; then
+    ./scripts/test-plugin-selection.sh
+    echo "✅ Plugin selection reconciliation passed"
+else
+    skip "plugin selection reconciliation test (needs jq, unzip, curl and python3)"
+fi
+
+echo "☕ Checking JDK selection per Minecraft version..."
+./scripts/test-java-for-minecraft.sh
+echo "✅ JDK selection per Minecraft version passed"
+
 echo "⚙️ Checking environment configuration..."
 test -f sample.env
 grep -q "MINECRAFT_VERSION=" sample.env
