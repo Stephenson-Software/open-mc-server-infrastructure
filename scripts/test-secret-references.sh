@@ -20,7 +20,7 @@ RESOLVER="$SCRIPT_DIR/resolve-secrets.sh"
 TEST_ROOT="/tmp/secret-reference-test"
 FAILURES=0
 
-# shellcheck disable=SC2317  # called via trap
+# shellcheck disable=SC2317,SC2329  # called via trap
 cleanup() { rm -rf "$TEST_ROOT"; }
 trap cleanup EXIT
 
@@ -44,7 +44,7 @@ assert_false() {
     fi
 }
 
-# shellcheck disable=SC2317  # invoked indirectly, as an argument to assert_true
+# shellcheck disable=SC2317,SC2329  # invoked indirectly, as an argument to assert_true
 contains() {
     case "$1" in
         *"$2"*) return 0 ;;
