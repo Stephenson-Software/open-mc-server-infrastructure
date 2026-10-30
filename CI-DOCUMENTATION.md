@@ -182,7 +182,9 @@ rather than replaced by another.
 
 Installs `clients/python` with `pip install -e` and runs its `unittest` suite
 on a matrix of Python 3.9 and 3.13 — the floor and the ceiling of the
-`requires-python` range the package advertises.
+`requires-python` range the package advertises. The job is pinned to
+`ubuntu-24.04` instead of `ubuntu-latest`, because `actions/setup-python` has
+no Python 3.9 build for Ubuntu 26.04.
 
 Two details are deliberate:
 
