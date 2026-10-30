@@ -22,7 +22,7 @@ test_error() {
 }
 
 # Cleanup function
-# shellcheck disable=SC2317  # Function called via signal trap
+# shellcheck disable=SC2317,SC2329  # Function called via signal trap
 cleanup() {
     test_log "Cleaning up test environment..."
     pkill -f "mock-minecraft-server" 2>/dev/null || true

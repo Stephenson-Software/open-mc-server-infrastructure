@@ -40,7 +40,7 @@ test_error() {
 }
 
 # Cleanup function
-# shellcheck disable=SC2317  # Function called via signal trap
+# shellcheck disable=SC2317,SC2329  # Function called via signal trap
 cleanup() {
     test_log "Cleaning up test environment..."
     docker image rm -f "$IMAGE" > /dev/null 2>&1 || true

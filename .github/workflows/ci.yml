@@ -528,7 +528,9 @@ jobs:
 
   python-client-test:
     name: Python Client Tests
-    runs-on: ubuntu-latest
+    # Pinned rather than ubuntu-latest: actions/setup-python publishes no 3.9
+    # build for Ubuntu 26.04, so the floor of the matrix cannot install there.
+    runs-on: ubuntu-24.04
 
     # The matrix is the floor and the ceiling of what clients/python/pyproject.toml
     # claims to support. Anything in between is interpolation; the two ends are
