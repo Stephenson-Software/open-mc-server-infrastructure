@@ -1178,6 +1178,7 @@ This script uses the backup-manager REST API to create an immediate backup, so t
 Or use Docker commands to manually copy server data:
 
 ```bash
+mkdir -p ./backup
 docker cp open-mc-server:/mcserver ./backup/
 ```
 
@@ -1550,7 +1551,8 @@ should not mint credentials nobody requested.
 Usage reporting is on by default: once the `minecraft-wrapper` is up it sends **one
 `startup` event** — its name (`open-mc-server-infrastructure`), its version, a random
 installation ID (described below) and any `USAGE_REPORTING_TAGS` you set (CI deployments
-tag `ci=true`) — to the project's usage service, [trace](https://danielstephenson.dev/usage-reporting), at
+tag `ci=true`) — to the project's usage service,
+[trace](https://danielstephenson.dev/usage-reporting), at
 `https://trace.danielstephenson.dev`, so the maintainers can see how many OMCSI deployments
 exist and which versions they run. Nothing else is sent: nothing about players, worlds, IP
 addresses, the host, the operator account, or anything that happens on the server after it
