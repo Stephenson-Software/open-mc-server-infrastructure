@@ -82,10 +82,10 @@ services:
       - WEBAPP_URL=${WEBAPP_URL:-http://webapp:8080}
       - DEPLOYMENT_AUTH_TOKEN=${DEPLOYMENT_AUTH_TOKEN:-}
       # Usage reporting (see "Usage reporting" in README.md). The wrapper sends one
-      # "startup" event per start — program name, version and USAGE_REPORTING_TAGS only.
-      # On by default; USAGE_REPORTING_ENABLED=false or TRACE_USAGE_REPORTING=off turns
-      # it off (DO_NOT_TRACK=1 too). The key default is the project's write-only program
-      # key, so an unset .env still reports.
+      # "startup" event per start — program name, version, a random installation ID and
+      # USAGE_REPORTING_TAGS only. On by default; USAGE_REPORTING_ENABLED=false or
+      # TRACE_USAGE_REPORTING=off turns it off (DO_NOT_TRACK=1 too). The key default is
+      # the project's write-only program key, so an unset .env still reports.
       # Details: https://danielstephenson.dev/usage-reporting
       - USAGE_REPORTING_ENABLED=${USAGE_REPORTING_ENABLED:-true}
       - USAGE_REPORTING_ENDPOINT=${USAGE_REPORTING_ENDPOINT:-https://trace.danielstephenson.dev}

@@ -5,7 +5,7 @@ This document details the automated checks performed by the CI/CD pipeline to en
 ## Overview
 
 The CI pipeline runs automatically on:
-- Every push to `main` and `develop` branches
+- Every push to `main`
 - Every pull request to `main`
 
 ## CI Jobs
@@ -60,6 +60,13 @@ in sync when a module is added or removed.
 
 ### 2. Helm Unit Tests (`helm-unit-test`)
 
+A separate job that installs the
+[`helm-unittest`](https://github.com/helm-unittest/helm-unittest) plugin and
+runs `helm unittest helm/omcsi`. The test suites live under
+`helm/omcsi/tests/` and cover NetworkPolicies, PodDisruptionBudgets,
+ServiceMonitors, security contexts, and per-service Deployment/Service
+templates.
+
 Includes `tests/rbac_test.yaml`, which guards the property that makes the viewer
 role worth having: it asserts that the viewer Role contains no `secrets` and no
 `pods/exec` rule. A role that quietly gains either stops being safe to hand out,
@@ -69,14 +76,6 @@ and nothing else would notice.
 nginx rather than the webapp. Routing straight to the webapp would appear to
 work while silently dropping the upload body limit, the upload timeouts and the
 BlueMap route, all of which live in nginx.
-
-
-A separate job that installs the
-[`helm-unittest`](https://github.com/helm-unittest/helm-unittest) plugin and
-runs `helm unittest helm/omcsi`. The test suites live under
-`helm/omcsi/tests/` and cover NetworkPolicies, PodDisruptionBudgets,
-ServiceMonitors, security contexts, and per-service Deployment/Service
-templates.
 
 ### 3. Helm Deploy Smoke Test (`helm-deploy-test`)
 
@@ -206,25 +205,33 @@ rather than mocked.
 A separate workflow that performs end-to-end testing by actually running
 the Minecraft server in a containerized environment.
 
+It runs as a matrix of two Minecraft versions: `default` (the `MINECRAFT_VERSION`
+in `sample.env`) and `1.19.4`, the oldest version a plugin test built on this
+image is expected to boot. The `1.19.4` leg also asserts that the server really
+is running that version. A final `Test Minecraft Server Run` job keeps the name
+of the required status check and passes only when every leg passed.
+
 #### Server Build and Startup
-- **Docker Image Build**: Builds the complete Minecraft server Docker image with Spigot
-- **Server Initialization**: Starts the server with test configuration and waits for full initialization.
+- **Docker Image Build**: Builds the `alert-manager` image and the complete Minecraft server image with Spigot
+- **Server Initialization**: Starts `alert-manager` and `minecraft-wrapper` with test configuration and waits for full initialization.
   The test `.env` sets `USAGE_REPORTING_TAGS=ci=true`, so the wrapper's one usage-reporting
   `startup` event is tagged as a CI run rather than counted as a real deployment
 - **Startup Verification**: Monitors server logs to confirm successful startup sequence completion
 
 #### Functionality Testing
-- **Port Verification**: Confirms server is listening on Minecraft port (25565) and RCON port (25575)
-- **File System Check**: Verifies critical server files are created (server.properties, world directory, etc.)
-- **Container Health**: Validates the Docker container is running properly
+- **Container Health**: Fails if the Docker container is not running
+- **Port Verification**: Reports whether the server is listening on the Minecraft port (25565) and RCON port (25575)
+- **File System Check**: Reports whether critical server files exist (server.properties, eula.txt, world directory)
 
 #### Graceful Shutdown Testing
-- **Shutdown Sequence**: Tests proper server shutdown using Docker Compose
-- **Log Validation**: Confirms graceful shutdown signals are processed correctly
-- **Resource Cleanup**: Ensures all resources are properly cleaned up after testing
+- **Shutdown Sequence**: Stops the stack with `docker compose down`
+- **Log Validation**: Reports whether the logs show a graceful shutdown
+- **Resource Cleanup**: Removes the stack's volumes and prunes Docker
 
-This workflow provides real-world verification that the server can actually
-start, run, and stop correctly in a production-like environment.
+The port, file and shutdown-log checks only print what they found; none of them
+can fail the job. The job fails on the startup wait, the container check, and
+the version assertion. So a green run proves the server started, not that it
+shut down gracefully.
 
 ## Local Testing
 
@@ -460,9 +467,7 @@ repository environment of that name adds a required approval before the upload.
 
 The CI pipeline includes multiple workflows:
 - **Validation Pipeline**: Typically completes in under 5 minutes
-- **Server Run Test**: Takes 15-25 minutes due to Spigot build time
-  - First-time Spigot compilation: ~10-15 minutes
-  - Server initialization: ~2-5 minutes
-  - Testing and cleanup: ~2-3 minutes
+- **Server Run Test**: Recent runs on `main` took about 7-11 minutes, most of it
+  Spigot build time. Each matrix leg has a 30-minute timeout.
 
 The server run test runs in parallel with other checks to provide comprehensive validation without significantly increasing total CI time.

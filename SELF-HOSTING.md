@@ -135,7 +135,7 @@ Create a `compose.override.yml` in the project root to restrict capabilities and
 ```yaml
 # Applies automatically when running 'docker compose up'
 services:
-  mcserver:
+  minecraft-wrapper:
     cap_drop:
       - ALL
     security_opt:
@@ -167,7 +167,7 @@ services:
 - Keep system and Docker images updated: `sudo apt-get upgrade -y && docker compose pull && ./up.sh`
 - Run backups regularly: `./trigger-backup.sh` (store copies offsite)
 - Never expose RCON (port 25575) publicly; use the web dashboard or SSH tunnel instead
-- Know what leaves your network: the wrapper sends one anonymous `startup` event (program name and version only) to the project's usage service on every start. Set `USAGE_REPORTING_ENABLED=false` (or `TRACE_USAGE_REPORTING=off`) in `.env` to turn it off — see "Usage reporting" in the README and https://danielstephenson.dev/usage-reporting
+- Know what leaves your network: the wrapper sends one anonymous `startup` event (program name, version, a random installation ID and any `USAGE_REPORTING_TAGS` you set) to the project's usage service on every start. Set `USAGE_REPORTING_ENABLED=false` (or `TRACE_USAGE_REPORTING=off`) in `.env` to turn it off — see "Usage reporting" in the README and https://danielstephenson.dev/usage-reporting
 
 ## Firewall Configuration
 
