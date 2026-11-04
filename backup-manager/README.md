@@ -122,13 +122,7 @@ curl -X POST http://localhost:8091/api/backups/trigger
 }
 ```
 
-### Option 3: Restart the Container
-
-Alternatively, wait for the next scheduled backup time or restart the container:
-
-```bash
-docker restart open-mc-backup-manager
-```
+Restarting the container does not create a backup: backups only run on the `BACKUP_SCHEDULE` cron or through the trigger endpoint.
 
 ## REST API
 

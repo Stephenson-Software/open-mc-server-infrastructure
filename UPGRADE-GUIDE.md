@@ -29,9 +29,10 @@ This guide provides a comprehensive process for upgrading your Minecraft server 
 - A working JDK if you intend to rebuild any Spring Boot modules locally
   (`web-app`, `minecraft-wrapper`, `agent-manager`, etc.) outside of Docker.
   The service containers ship with a **Java 21 runtime**
-  (`eclipse-temurin:21-jre`); the main Minecraft server image builds Spigot
-  with **JDK 25**
-  (`eclipse-temurin:25.0.3_9-jdk-noble`). If you only edit the `.env` file
+  (`eclipse-temurin:21-jre`); the main Minecraft server image is based on
+  `eclipse-temurin:25.0.3_9-jdk-noble` and builds Spigot with the JDK that
+  `resources/java-for-minecraft.sh` picks for `MINECRAFT_VERSION` (17, 21 or
+  25). If you only edit the `.env` file
   and rebuild via `./upgrade.sh` or `docker compose build`, no host JDK is
   required — Docker handles everything.
 
@@ -46,12 +47,14 @@ For a streamlined upgrade experience, use the automated upgrade script that hand
 ```
 
 The script will:
-1. ✅ Stop the server gracefully
-2. ✅ Create a timestamped backup automatically
-3. ✅ Prompt for the new Minecraft version
+1. ✅ Prompt for the new Minecraft version and ask for confirmation
+2. ✅ Reuse the newest complete backup, or create one if none exists
+3. ✅ Stop the server gracefully
 4. ✅ Update the `.env` file
 5. ✅ Rebuild the Docker image with the new version
-6. ✅ Start the server and show initial logs
+6. ✅ Start the server, watch the logs for a successful startup, and show recent logs
+
+**Note**: The newest complete backup is reused however old it is. If the last backup is not recent enough to fall back on, run `./trigger-backup.sh` before `./upgrade.sh`.
 
 **Benefits:**
 - Single command execution
@@ -80,8 +83,8 @@ without stopping the server, touching `.env`, or creating a backup:
 ```
 
 This prints the current version, target version, current world data size,
-and where the backup would be stored (an existing recent backup, or a new
-one the script would create).
+and where the backup would be stored (the newest complete backup, or a new
+one the script would create if there is none).
 
 If you prefer manual control or need to understand each step, continue with the manual process below.
 
@@ -117,8 +120,11 @@ The backup-manager service automatically creates scheduled backups (default: 2 A
 # List backups in the named volume (also shown by `./rollback.sh` with no args)
 docker run --rm -v backups:/backups:ro alpine sh -c 'ls -lth /backups'
 
-# If no recent backup, trigger one manually
+# If no recent backup, trigger one manually. Step 1 stopped backup-manager too,
+# so start it first; this leaves the Minecraft server stopped.
+docker compose up -d backup-manager
 ./trigger-backup.sh
+docker compose down
 ```
 
 **Benefits:**
@@ -150,7 +156,8 @@ echo "Backup created at: $BACKUP_DIR/mcserver-backup.tar.gz"
 
 ```bash
 # Create backup directory
-mkdir -p ./backups/backup-$(date +%Y%m%d-%H%M%S)
+BACKUP_DIR="./backups/backup-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$BACKUP_DIR"
 
 # Start a temporary container to access the volume
 docker run -d --name mcserver-backup \
@@ -158,7 +165,7 @@ docker run -d --name mcserver-backup \
   ubuntu sleep 300
 
 # Copy the data
-docker cp mcserver-backup:/mcserver "./backups/backup-$(date +%Y%m%d-%H%M%S)/"
+docker cp mcserver-backup:/mcserver "$BACKUP_DIR/"
 
 # Cleanup temporary container
 docker rm -f mcserver-backup
@@ -188,7 +195,7 @@ docker run --rm -v backups:/backups:ro alpine sh -c 'ls -lh /backups/backup-*/mc
 ls -lh "$BACKUP_DIR/mcserver-backup.tar.gz"
 
 # For Option C (docker cp)
-du -sh "./backups/backup-$(date +%Y%m%d-%H%M%S)/"
+du -sh "$BACKUP_DIR/"
 ```
 
 ### Step 3: Update Minecraft Version
@@ -276,7 +283,7 @@ docker logs -f open-mc-server
 ```
 
 **Look for these indicators of successful startup:**
-- `[SERVER-SETUP] Starting server with graceful shutdown wrapper...`
+- `[SERVER-SETUP] Starting server with Spring Boot wrapper...`
 - `Done (X.XXXs)! For help, type "help"`
 - No errors about incompatible world format
 - Plugins loading successfully
@@ -338,7 +345,21 @@ docker run --rm \
   alpine sh -c "tar xzf /backups/${BACKUP_NAME}/mcserver-backup.tar.gz -C /mcserver"
 ```
 
-#### If you used Option B (directory backup):
+#### If you used Option B (tarball in a local directory):
+
+```bash
+# Specify your backup directory
+BACKUP_DIR="./backups/backup-YYYYMMDD-HHMMSS"
+
+# Extract the tarball into the volume, then hand it to the server's user (UID 1000)
+docker run --rm \
+  -v mcserver:/mcserver \
+  -v "$(pwd)/$BACKUP_DIR":/backup:ro \
+  ubuntu \
+  sh -c "tar xzf /backup/mcserver-backup.tar.gz -C /mcserver && chown -R 1000:1000 /mcserver"
+```
+
+#### If you used Option C (directory copy):
 
 ```bash
 # Specify your backup directory
@@ -349,8 +370,10 @@ docker run -d --name mcserver-restore \
   -v mcserver:/mcserver \
   ubuntu sleep 300
 
-# Copy the data back
+# Copy the data back. docker cp creates the files as root, so hand them to the
+# server's user (UID 1000) afterward.
 docker cp "$BACKUP_DIR/mcserver/." mcserver-restore:/mcserver/
+docker exec mcserver-restore chown -R 1000:1000 /mcserver
 
 # Cleanup
 docker rm -f mcserver-restore
@@ -358,14 +381,11 @@ docker rm -f mcserver-restore
 
 ### Step 4: Revert Configuration
 
-Restore your previous `.env` and `Dockerfile` settings:
+Restore your previous `MINECRAFT_VERSION` in `.env`:
 
 ```bash
 # Edit .env to restore old MINECRAFT_VERSION
 nano .env
-
-# Edit Dockerfile to restore old version references
-nano Dockerfile
 ```
 
 ### Step 5: Rebuild and Restart
@@ -407,12 +427,12 @@ docker logs open-mc-server --tail 50
 ### 4. Check Plugins
 
 ```bash
-# Access server console
-docker exec -it open-mc-server screen -r minecraft
-# Use 'plugins' command to list all plugins
-# Press Ctrl+A then D to detach
+# Run the 'plugins' command through the wrapper's REST API (WRAPPER_PORT, default 8092)
+curl -X POST http://localhost:8092/api/server/command \
+  -H "Content-Type: text/plain" \
+  -d "plugins"
 
-# Or view from logs
+# The command's output goes to the server logs
 docker logs open-mc-server | grep -i plugin
 ```
 
@@ -464,8 +484,8 @@ docker logs -f open-mc-server | grep -i error
    ```bash
    docker logs open-mc-server | grep "Starting minecraft server version"
    ```
-2. Ensure the Dockerfile version matches `.env`
-3. Rebuild the image if versions don't match:
+2. Ensure `MINECRAFT_VERSION` in `.env` is the version you expect
+3. Rebuild the image if the versions don't match:
    ```bash
    docker compose build --no-cache
    ```
@@ -541,7 +561,7 @@ If you encounter issues not covered in this guide:
 
 1. Check the [main README troubleshooting section](./README.md#troubleshooting)
 2. Review server logs for specific error messages
-3. Submit an issue on the [GitHub repository](https://github.com/dmccoystephenson/open-mc-server-infrastructure/issues)
+3. Submit an issue on the [GitHub repository](https://github.com/Stephenson-Software/open-mc-server-infrastructure/issues)
 
 ---
 

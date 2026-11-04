@@ -1,6 +1,6 @@
 # Open Minecraft Server Infrastructure
 
-[![CI Pipeline](https://github.com/dmccoystephenson/open-mc-server-infrastructure/workflows/CI%20Pipeline/badge.svg?branch=main)](https://github.com/dmccoystephenson/open-mc-server-infrastructure/actions)
+[![CI Pipeline](https://github.com/Stephenson-Software/open-mc-server-infrastructure/workflows/CI%20Pipeline/badge.svg?branch=main)](https://github.com/Stephenson-Software/open-mc-server-infrastructure/actions)
 
 An open, community-agnostic, Docker-based Minecraft server infrastructure running the latest version of Minecraft (26.2) with Spigot for enhanced plugin support and performance. Highly configurable and customizable for any use case.
 
@@ -1173,11 +1173,7 @@ To trigger a manual backup immediately:
 ./trigger-backup.sh
 ```
 
-This script uses the backup-manager REST API to create an immediate backup. Alternatively, you can restart the backup-manager container:
-
-```bash
-docker restart open-mc-backup-manager
-```
+This script uses the backup-manager REST API to create an immediate backup, so the backup-manager container has to be running.
 
 Or use Docker commands to manually copy server data:
 
@@ -1188,12 +1184,18 @@ docker cp open-mc-server:/mcserver ./backup/
 **Note**: Replace `open-mc-server` with your `CONTAINER_NAME` value if you've customized it.
 
 ### Restore Server Data
+
+To restore a backup-manager backup:
+
 ```bash
-docker cp ./backup/ open-mc-server:/mcserver
-docker compose restart
+# List available backups
+./rollback.sh
+
+# Restore one (the server is stopped first and started again afterward)
+./rollback.sh 20260115-020000
 ```
 
-**Note**: Replace `open-mc-server` with your `CONTAINER_NAME` value if you've customized it.
+To restore a copy made with `docker cp`, follow [Manual Rollback](UPGRADE-GUIDE.md#manual-rollback) in the Upgrade Guide, using the Option C steps with `BACKUP_DIR="./backup"`. Do not copy files into the running container: the server writes its own world data when it stops, which overwrites what was just restored.
 
 ### Deposit Box
 The `deposit-box` directory is shared between your host system and the container at `/deposit-box`. Use it to transfer files to/from the server.
@@ -1209,12 +1211,14 @@ The easiest way to upgrade your Minecraft server to a new version:
 ```
 
 This script automates the entire upgrade process:
+- Prompts for the new version and asks for confirmation
+- Reuses the newest complete backup, or creates one if none exists
 - Stops the server gracefully
-- Creates a timestamped backup automatically
-- Prompts for the new version
 - Updates configuration
 - Rebuilds with the new version
-- Starts the server
+- Starts the server and watches the logs for a successful startup
+
+The newest complete backup is reused however old it is, so run `./trigger-backup.sh` first if the last backup is not recent enough to fall back on.
 
 Preview an upgrade without making any changes with `./upgrade.sh --dry-run` (optionally `./upgrade.sh --dry-run <version>` to skip the version prompt). If an upgrade needs to be undone, `./rollback.sh` restores a previous backup and restarts the server — see [Rollback Procedure](UPGRADE-GUIDE.md#rollback-procedure) in the Upgrade Guide.
 
@@ -1253,7 +1257,7 @@ docker compose build --no-cache
 - Verify the server is running: `docker ps`
 
 ### Performance Issues
-- Adjust memory allocation in `sample.env` by setting appropriate values
+- Adjust memory allocation by setting `JAVA_OPTS` in `.env`
 - Monitor system resources: `docker stats open-mc-server` (use your `CONTAINER_NAME` value)
 
 ## Co-locating servers
@@ -1544,9 +1548,9 @@ should not mint credentials nobody requested.
 ## Usage reporting
 
 Usage reporting is on by default: once the `minecraft-wrapper` is up it sends **one
-`startup` event** — its name (`open-mc-server-infrastructure`), its version and any
-`USAGE_REPORTING_TAGS` you set (CI deployments tag `ci=true`) — to the project's usage
-service, [trace](https://danielstephenson.dev/usage-reporting), at
+`startup` event** — its name (`open-mc-server-infrastructure`), its version, a random
+installation ID (described below) and any `USAGE_REPORTING_TAGS` you set (CI deployments
+tag `ci=true`) — to the project's usage service, [trace](https://danielstephenson.dev/usage-reporting), at
 `https://trace.danielstephenson.dev`, so the maintainers can see how many OMCSI deployments
 exist and which versions they run. Nothing else is sent: nothing about players, worlds, IP
 addresses, the host, the operator account, or anything that happens on the server after it
@@ -1694,7 +1698,7 @@ The CI pipeline runs on:
 - Every push to `main`
 - Every pull request to `main`
 
-Check the [Actions tab](https://github.com/dmccoystephenson/open-mc-server-infrastructure/actions) for detailed CI results and logs.
+Check the [Actions tab](https://github.com/Stephenson-Software/open-mc-server-infrastructure/actions) for detailed CI results and logs.
 
 ## Contributing
 
