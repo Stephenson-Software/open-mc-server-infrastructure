@@ -4,10 +4,11 @@
 # This script runs the same checks that the CI pipeline will run.
 #
 # Checks that depend on an optional tool (ShellCheck, Helm, the helm-unittest
-# plugin, Terraform) are skipped with a warning when that tool is missing
-# locally, and every skip is reported again in the summary at the end. A skipped
-# check is still enforced by .github/workflows/ci.yml, so a clean local run with
-# skips is weaker than a green CI run.
+# plugin, Terraform, a reachable Docker daemon, or the jq/unzip/curl/python3 set
+# the plugin selection test needs) are skipped with a warning when that tool is
+# unavailable locally, and every skip is reported again in the summary at the
+# end. A skipped check is still enforced by .github/workflows/ci.yml, so a clean
+# local run with skips is weaker than a green CI run.
 
 set -e
 
@@ -119,6 +120,7 @@ test -f sample.env
 grep -q "MINECRAFT_VERSION=" sample.env
 grep -q "OPERATOR_UUID=" sample.env
 grep -q "OPERATOR_NAME=" sample.env
+grep -q "SERVER_MOTD=" sample.env
 echo "✅ Environment configuration validation passed"
 
 echo "📚 Checking documentation..."

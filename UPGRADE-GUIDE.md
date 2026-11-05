@@ -337,12 +337,13 @@ docker volume rm mcserver
 # Specify your backup directory name (see: docker run --rm -v backups:/backups:ro alpine ls /backups)
 BACKUP_NAME="backup-YYYYMMDD-HHMMSS"
 
-# Restore the data directly from the "backups" volume into the "mcserver" volume
+# Restore the data directly from the "backups" volume into the "mcserver" volume.
+# Step 2 removed the volume, so this command recreates it owned by root: extract
+# as root, then hand it to the server's user (UID 1000).
 docker run --rm \
-  --user 1000:1000 \
   -v backups:/backups:ro \
   -v mcserver:/mcserver \
-  alpine sh -c "tar xzf /backups/${BACKUP_NAME}/mcserver-backup.tar.gz -C /mcserver"
+  alpine sh -c "tar xzf /backups/${BACKUP_NAME}/mcserver-backup.tar.gz -C /mcserver && chown -R 1000:1000 /mcserver"
 ```
 
 #### If you used Option B (tarball in a local directory):
