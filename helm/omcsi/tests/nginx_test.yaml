@@ -224,3 +224,180 @@ tests:
       - matchRegex:
           path: data["nginx.conf"]
           pattern: 'location /api/plugins/upload \{\s+proxy_pass http://RELEASE-NAME-omcsi-webapp:8080;'
+
+  # nginx.tls.selfSigned selects one of two certificate sources, and both must end
+  # up as cert.pem / key.pem under /etc/nginx/ssl, the paths nginx.conf reads.
+  - it: self-signed TLS is the default and generates the certificate in an init container
+    documentSelector:
+      path: kind
+      value: Deployment
+      skipEmptyTemplates: true
+    asserts:
+      - lengthEqual:
+          path: spec.template.spec.initContainers
+          count: 1
+      - equal:
+          path: spec.template.spec.initContainers[0].name
+          value: generate-tls
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].command[2]
+          pattern: 'openssl req -x509 -nodes -days 365 -newkey rsa:2048'
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].command[2]
+          pattern: '-keyout /etc/nginx/ssl/key\.pem'
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].command[2]
+          pattern: '-out /etc/nginx/ssl/cert\.pem'
+
+  - it: self-signed init container keeps a certificate that already exists
+    documentSelector:
+      path: kind
+      value: Deployment
+      skipEmptyTemplates: true
+    asserts:
+      - matchRegex:
+          path: spec.template.spec.initContainers[0].command[2]
+          pattern: 'if \[ ! -f /etc/nginx/ssl/cert\.pem \] \|\| \[ ! -f /etc/nginx/ssl/key\.pem \]; then'
+
+  - it: self-signed init container runs from the nginx image
+    set:
+      nginx.image.repository: registry.example.com/nginx
+      nginx.image.tag: "1.2.3"
+    documentSelector:
+      path: kind
+      value: Deployment
+      skipEmptyTemplates: true
+    asserts:
+      - equal:
+          path: spec.template.spec.initContainers[0].image
+          value: registry.example.com/nginx:1.2.3
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: registry.example.com/nginx:1.2.3
+
+  # containerSecurityContext makes the root filesystem read-only, so HOME points at
+  # the /tmp emptyDir, which is writable.
+  - it: self-signed init container gets a writable HOME on the root-read-only filesystem
+    documentSelector:
+      path: kind
+      value: Deployment
+      skipEmptyTemplates: true
+    asserts:
+      - contains:
+          path: spec.template.spec.initContainers[0].env
+          content:
+            name: HOME
+            value: /tmp
+      - contains:
+          path: spec.template.spec.initContainers[0].volumeMounts
+          content:
+            name: nginx-tmp
+            mountPath: /tmp
+
+  # The exact-match `contains` on the nginx container's mount is what proves it is
+  # not read-only here: a readOnly key would make the entry unequal.
+  - it: self-signed certificates live in an emptyDir shared by the init container and nginx
+    documentSelector:
+      path: kind
+      value: Deployment
+      skipEmptyTemplates: true
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: tls
+            emptyDir: {}
+      - contains:
+          path: spec.template.spec.initContainers[0].volumeMounts
+          content:
+            name: tls
+            mountPath: /etc/nginx/ssl
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: tls
+            mountPath: /etc/nginx/ssl
+
+  - it: supplied TLS renders no init container
+    set:
+      nginx.tls.selfSigned: false
+    documentSelector:
+      path: kind
+      value: Deployment
+      skipEmptyTemplates: true
+    asserts:
+      - notExists:
+          path: spec.template.spec.initContainers
+
+  - it: supplied TLS maps the Secret's keys to the file names nginx reads
+    set:
+      nginx.tls.selfSigned: false
+    documentSelector:
+      path: kind
+      value: Deployment
+      skipEmptyTemplates: true
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: tls
+            secret:
+              secretName: RELEASE-NAME-omcsi-nginx-tls
+              items:
+                - key: tls.crt
+                  path: cert.pem
+                - key: tls.key
+                  path: key.pem
+      - notContains:
+          path: spec.template.spec.volumes
+          content:
+            name: tls
+            emptyDir: {}
+
+  # values.yaml documents both forms of the Secret name operators must create.
+  - it: supplied TLS Secret drops the chart name when the release name already contains it
+    release:
+      name: omcsi-prod
+    set:
+      nginx.tls.selfSigned: false
+    documentSelector:
+      path: kind
+      value: Deployment
+      skipEmptyTemplates: true
+    asserts:
+      - contains:
+          path: spec.template.spec.volumes
+          content:
+            name: tls
+            secret:
+              secretName: omcsi-prod-nginx-tls
+              items:
+                - key: tls.crt
+                  path: cert.pem
+                - key: tls.key
+                  path: key.pem
+
+  - it: supplied TLS mounts the Secret read-only into nginx
+    set:
+      nginx.tls.selfSigned: false
+    documentSelector:
+      path: kind
+      value: Deployment
+      skipEmptyTemplates: true
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].volumeMounts
+          content:
+            name: tls
+            mountPath: /etc/nginx/ssl
+            readOnly: true
+
+  - it: nginx serves HTTPS from the certificate paths both TLS modes populate
+    template: templates/nginx-configmap.yaml
+    asserts:
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'listen 443 ssl;[\s\S]*?ssl_certificate\s+/etc/nginx/ssl/cert\.pem;'
+      - matchRegex:
+          path: data["nginx.conf"]
+          pattern: 'ssl_certificate_key\s+/etc/nginx/ssl/key\.pem;'
