@@ -1583,7 +1583,8 @@ To turn it off, any one of these is enough:
   every trace client honours, checked before `USAGE_REPORTING_ENABLED`; on Compose it is
   passed through from `.env`, on Kubernetes it is `minecraftWrapper.env.TRACE_USAGE_REPORTING`
 - **Any environment:** `DO_NOT_TRACK=1` (also `true`, `yes`), per
-  [consoledonottrack.com](https://consoledonottrack.com); passed through from `.env` on Compose
+  [consoledonottrack.com](https://consoledonottrack.com); on Compose it is passed through from
+  `.env`, on Kubernetes it is `minecraftWrapper.env.DO_NOT_TRACK`
 
 The related variables, for Compose in `.env` and for Kubernetes under `minecraftWrapper.env`
 in `helm/omcsi/values.yaml`:
@@ -1593,6 +1594,7 @@ in `helm/omcsi/values.yaml`:
 - `USAGE_REPORTING_KEY`: The program key. Leave empty to use the project's bundled write-only key (default)
 - `USAGE_REPORTING_TAGS`: Optional comma-separated `k=v` pairs attached to the event, e.g. `ci=true` so a CI deployment can be told apart from a real one. `version` is reserved (default: empty)
 - `TRACE_USAGE_REPORTING`: `off` turns it off regardless of the above (default: unset)
+- `DO_NOT_TRACK`: `1` turns it off regardless of the above (default: unset)
 
 ```bash
 helm upgrade omcsi helm/omcsi --namespace omcsi --reuse-values \

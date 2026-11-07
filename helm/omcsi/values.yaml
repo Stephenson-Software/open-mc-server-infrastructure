@@ -156,8 +156,10 @@ minecraftWrapper:
     USAGE_REPORTING_TAGS: ""
     # The switch every trace client honours, checked before USAGE_REPORTING_ENABLED:
     # "off" (or "false", "0", "no") turns reporting off. Empty means not set.
-    # DO_NOT_TRACK=1 in the container's environment has the same effect.
     TRACE_USAGE_REPORTING: ""
+    # The https://consoledonottrack.com convention: "1" (or "true", "yes") turns
+    # reporting off too. Empty means not set.
+    DO_NOT_TRACK: ""
 
 # ---------------------------------------------------------------------------
 # Web Application (Dashboard)
