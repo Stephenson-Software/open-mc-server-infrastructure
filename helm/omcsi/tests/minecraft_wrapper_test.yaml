@@ -481,6 +481,39 @@ tests:
             value: "off"
         documentIndex: 0
 
+  # DO_NOT_TRACK is the other documented opt-out. Empty means not set, and the
+  # client treats it that way, so the default must leave reporting on.
+  - it: DO_NOT_TRACK is unset by default
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: DO_NOT_TRACK
+            value: ""
+        documentIndex: 0
+
+  - it: DO_NOT_TRACK=1 is passed through from values
+    set:
+      minecraftWrapper.env.DO_NOT_TRACK: "1"
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: DO_NOT_TRACK
+            value: "1"
+        documentIndex: 0
+
+  - it: DO_NOT_TRACK stays a string when set as a bare number
+    set:
+      minecraftWrapper.env.DO_NOT_TRACK: 1
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: DO_NOT_TRACK
+            value: "1"
+        documentIndex: 0
+
   - it: mounts the optional <release>-plugins ConfigMap read-only for the plugin selection
     asserts:
       - contains:
