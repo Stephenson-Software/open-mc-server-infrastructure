@@ -23,7 +23,8 @@ import java.util.Map;
  * deployments are running and on which version.
  *
  * <p>Exactly one event is sent, {@code startup}, once the wrapper is up. It carries the
- * program name ({@value #APPLICATION}), the wrapper's version and any operator-supplied
+ * program name ({@value #APPLICATION}), the wrapper's version, a random installation ID
+ * (the tag {@code install}, see {@link #installId()}) and any operator-supplied
  * {@code USAGE_REPORTING_TAGS} — nothing per request, nothing per player, and nothing about
  * the world, the operator, the host or its address. The send happens on the client's own
  * daemon thread, never throws, and a trace server that is down or unreachable costs nothing
