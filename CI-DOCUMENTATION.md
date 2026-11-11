@@ -80,8 +80,9 @@ BlueMap route, all of which live in nginx.
 `tests/secret_test.yaml` asserts that the chart refuses to render without
 `secrets.rconPassword` or `secrets.adminPassword`, and without each of the three
 agent credentials once `agentManager.enabled` is true. Losing one of those
-`required` guards would let an install proceed with an empty password or a bot
-that cannot start.
+`required` guards would let an install proceed with an empty password, or deploy
+agent-manager without a credential it needs (without the bot token, for
+example, its Discord bot logs a warning and never starts).
 
 ### 3. Helm Deploy Smoke Test (`helm-deploy-test`)
 
