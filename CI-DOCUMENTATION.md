@@ -77,6 +77,12 @@ nginx rather than the webapp. Routing straight to the webapp would appear to
 work while silently dropping the upload body limit, the upload timeouts and the
 BlueMap route, all of which live in nginx.
 
+`tests/secret_test.yaml` asserts that the chart refuses to render without
+`secrets.rconPassword` or `secrets.adminPassword`, and without each of the three
+agent credentials once `agentManager.enabled` is true. Losing one of those
+`required` guards would let an install proceed with an empty password or a bot
+that cannot start.
+
 ### 3. Helm Deploy Smoke Test (`helm-deploy-test`)
 
 Spins up a `kind` cluster, installs the chart with minimal required values,
