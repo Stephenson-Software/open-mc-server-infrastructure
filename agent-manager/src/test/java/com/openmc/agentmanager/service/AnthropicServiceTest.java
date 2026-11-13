@@ -2,6 +2,7 @@ package com.openmc.agentmanager.service;
 
 import com.openmc.agentmanager.model.AnthropicRequest;
 import com.openmc.agentmanager.model.AnthropicResponse;
+import com.openmc.agentmanager.model.ToolResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -246,5 +247,42 @@ class AnthropicServiceTest {
         assertNotNull(toolBlock);
         assertEquals("start_server", toolBlock.getName());
         assertEquals("tool-1", toolBlock.getId());
+    }
+
+    @Test
+    @DisplayName("Should send the tool result as a typed ToolResultContent block in the final user message")
+    void shouldSendToolResultAsTypedBlock() {
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<HttpEntity<AnthropicRequest>> captor = ArgumentCaptor.forClass(HttpEntity.class);
+        when(restTemplate.exchange(any(String.class), eq(HttpMethod.POST), captor.capture(),
+                eq(AnthropicResponse.class)))
+                .thenReturn(ResponseEntity.ok(AnthropicResponse.builder().build()));
+
+        List<AnthropicResponse.ContentBlock> assistantContent = List.of(
+                AnthropicResponse.ContentBlock.builder()
+                        .type("tool_use")
+                        .id("toolu_789")
+                        .name("trigger_backup")
+                        .build());
+        ToolResult toolResult = ToolResult.builder()
+                .toolUseId("toolu_789")
+                .toolName("trigger_backup")
+                .success(true)
+                .message("Backup triggered")
+                .build();
+
+        anthropicService.sendToolResult("back up the world", assistantContent, toolResult);
+
+        List<AnthropicRequest.Message> messages = captor.getValue().getBody().getMessages();
+        assertEquals(3, messages.size());
+        AnthropicRequest.Message toolResultMessage = messages.get(2);
+        assertEquals("user", toolResultMessage.getRole());
+        List<?> content = (List<?>) toolResultMessage.getContent();
+        assertEquals(1, content.size());
+        AnthropicRequest.ToolResultContent block =
+                assertInstanceOf(AnthropicRequest.ToolResultContent.class, content.get(0));
+        assertEquals("tool_result", block.getType());
+        assertEquals("toolu_789", block.getToolUseId());
+        assertEquals("Backup triggered", block.getContent());
     }
 }
