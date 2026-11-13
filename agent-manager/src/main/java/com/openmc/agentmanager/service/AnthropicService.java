@@ -112,11 +112,12 @@ public class AnthropicService {
                 .build());
 
         // Add tool result message
-        List<Map<String, Object>> toolResultContent = List.of(Map.of(
-                "type", "tool_result",
-                "tool_use_id", toolResult.getToolUseId(),
-                "content", toolResult.getMessage()
-        ));
+        List<AnthropicRequest.ToolResultContent> toolResultContent = List.of(
+                AnthropicRequest.ToolResultContent.builder()
+                        .type("tool_result")
+                        .toolUseId(toolResult.getToolUseId())
+                        .content(toolResult.getMessage())
+                        .build());
 
         messages.add(AnthropicRequest.Message.builder()
                 .role("user")
