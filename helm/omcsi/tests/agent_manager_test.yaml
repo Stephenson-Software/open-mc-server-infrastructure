@@ -128,3 +128,188 @@ tests:
           path: spec.ports[0].port
           value: 8093
         documentIndex: 1
+
+  # -------------------------------------------------------------------------
+  # Credentials come from the chart Secret, never from a plain value
+  # -------------------------------------------------------------------------
+  - it: reads the bot token, channel ID and Anthropic key from the chart Secret
+    set:
+      agentManager.enabled: true
+      secrets.agentDiscordBotToken: ci-token
+      secrets.agentDiscordChannelId: "123456"
+      secrets.agentAnthropicApiKey: ci-key
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AGENT_DISCORD_BOT_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: RELEASE-NAME-omcsi-secrets
+                key: AGENT_DISCORD_BOT_TOKEN
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AGENT_DISCORD_CHANNEL_ID
+            valueFrom:
+              secretKeyRef:
+                name: RELEASE-NAME-omcsi-secrets
+                key: AGENT_DISCORD_CHANNEL_ID
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AGENT_ANTHROPIC_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: RELEASE-NAME-omcsi-secrets
+                key: AGENT_ANTHROPIC_API_KEY
+        documentIndex: 0
+
+  # -------------------------------------------------------------------------
+  # Inter-service URLs. Each must match the Service the target template
+  # renders; a wrong host or port fails only at call time, inside the pod.
+  # The Docker Compose equivalents are in compose.yml's agent-manager service.
+  # -------------------------------------------------------------------------
+  - it: points at the wrapper's internal Service on the wrapper port
+    set:
+      agentManager.enabled: true
+      secrets.agentDiscordBotToken: ci-token
+      secrets.agentDiscordChannelId: "123456"
+      secrets.agentAnthropicApiKey: ci-key
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MINECRAFT_WRAPPER_URL
+            value: http://RELEASE-NAME-omcsi-minecraft-wrapper-internal:8092
+        documentIndex: 0
+
+  - it: points at the alert-manager alerts endpoint, backup-manager and webapp
+    set:
+      agentManager.enabled: true
+      secrets.agentDiscordBotToken: ci-token
+      secrets.agentDiscordChannelId: "123456"
+      secrets.agentAnthropicApiKey: ci-key
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ALERT_MANAGER_URL
+            value: http://RELEASE-NAME-omcsi-alert-manager:8090/api/alerts
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: BACKUP_MANAGER_URL
+            value: http://RELEASE-NAME-omcsi-backup-manager:8091
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WEBAPP_URL
+            value: http://RELEASE-NAME-omcsi-webapp:8080
+        documentIndex: 0
+
+  - it: inter-service URLs follow the target services' port overrides
+    set:
+      agentManager.enabled: true
+      secrets.agentDiscordBotToken: ci-token
+      secrets.agentDiscordChannelId: "123456"
+      secrets.agentAnthropicApiKey: ci-key
+      minecraftWrapper.internalService.wrapperPort: 9092
+      alertManager.service.port: 9090
+      backupManager.service.port: 9091
+      webapp.service.port: 9080
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: MINECRAFT_WRAPPER_URL
+            value: http://RELEASE-NAME-omcsi-minecraft-wrapper-internal:9092
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: ALERT_MANAGER_URL
+            value: http://RELEASE-NAME-omcsi-alert-manager:9090/api/alerts
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: BACKUP_MANAGER_URL
+            value: http://RELEASE-NAME-omcsi-backup-manager:9091
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: WEBAPP_URL
+            value: http://RELEASE-NAME-omcsi-webapp:9080
+        documentIndex: 0
+
+  # -------------------------------------------------------------------------
+  # Safety defaults: the bot runs once enabled, destructive tools ask first,
+  # and the opt-in diagnostics stay off with log anonymisation on.
+  # -------------------------------------------------------------------------
+  - it: renders the agent, confirmation and diagnostics defaults
+    set:
+      agentManager.enabled: true
+      secrets.agentDiscordBotToken: ci-token
+      secrets.agentDiscordChannelId: "123456"
+      secrets.agentAnthropicApiKey: ci-key
+    asserts:
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AGENT_ENABLED
+            value: "true"
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AGENT_START_SERVER_REQUIRES_CONFIRMATION
+            value: "true"
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AGENT_STOP_SERVER_REQUIRES_CONFIRMATION
+            value: "true"
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AGENT_RESTART_SERVER_REQUIRES_CONFIRMATION
+            value: "true"
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: AGENT_TRIGGER_BACKUP_REQUIRES_CONFIRMATION
+            value: "true"
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: DIAGNOSTICS_WEBAPP_ENABLED
+            value: "false"
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: DIAGNOSTICS_LOGS_ENABLED
+            value: "false"
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: DIAGNOSTICS_LOGS_MAX_LINES
+            value: "500"
+        documentIndex: 0
+      - contains:
+          path: spec.template.spec.containers[0].env
+          content:
+            name: DIAGNOSTICS_LOGS_ANONYMIZE
+            value: "true"
+        documentIndex: 0
