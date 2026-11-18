@@ -3,7 +3,6 @@ package com.openmc.alertmanager.model.discord;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
@@ -84,8 +83,6 @@ class DiscordWebhookPayloadTest {
     }
 
     @Test
-    @Disabled("Known bug #337: avatarUrl has no @JsonProperty(\"avatar_url\") and serializes as "
-        + "\"avatarUrl\", which Discord ignores. Remove @Disabled when #337 is fixed.")
     @DisplayName("Should serialize avatarUrl under Discord's snake_case avatar_url key")
     void shouldSerializeAvatarUrlAsSnakeCase() {
         DiscordWebhookPayload payload = DiscordWebhookPayload.builder()
