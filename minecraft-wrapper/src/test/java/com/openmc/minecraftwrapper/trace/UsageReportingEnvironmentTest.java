@@ -4,6 +4,8 @@ import com.openmc.minecraftwrapper.service.UsageReportingService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.info.BuildProperties;
 
@@ -64,10 +66,57 @@ class UsageReportingEnvironmentTest {
         service.close();
     }
 
-    @SuppressWarnings("unchecked")
+    @ParameterizedTest
+    @ValueSource(strings = {"false", "FALSE", "off", "no", "0", "", " ", "disabled", "flase", "\"false\""})
+    void usageReportingEnabledFailsClosed(String value) {
+        // Spring's own boolean conversion refused to start on a typo or a blank value; the
+        // switch is now read through the client's helper, so anything but a clear "on" is off.
+        UsageReportingService service = newService(value);
+
+        assertFalse(service.isEnabled(), "USAGE_REPORTING_ENABLED=" + value + " must switch reporting off");
+        service.close();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"true", "TRUE", "on", "yes", "1", " true "})
+    void usageReportingEnabledOnValuesKeepItOn(String value) {
+        UsageReportingService service = newService(value);
+
+        assertTrue(service.isEnabled(), "USAGE_REPORTING_ENABLED=" + value + " keeps reporting on");
+        service.close();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"false", "disabled", "0"})
+    void traceUsageReportingFailsClosed(String value) {
+        environment.put("TRACE_USAGE_REPORTING", value);
+
+        UsageReportingService service = newService();
+
+        assertFalse(service.isEnabled(), "TRACE_USAGE_REPORTING=" + value + " must switch reporting off");
+        service.close();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"true", "yes", "anything"})
+    void doNotTrackFailsClosed(String value) {
+        environment.put("DO_NOT_TRACK", value);
+
+        UsageReportingService service = newService();
+
+        assertFalse(service.isEnabled(), "DO_NOT_TRACK=" + value + " must switch reporting off");
+        service.close();
+    }
+
     private static UsageReportingService newService() {
+        return newService("true");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static UsageReportingService newService(String enabled) {
         ObjectProvider<BuildProperties> noBuildProperties = mock(ObjectProvider.class);
-        // Enabled, with a key, pointed at a port nothing listens on: nothing is sent either way.
-        return new UsageReportingService(true, "http://127.0.0.1:9", "test-key", "", noBuildProperties);
+        // With a key, pointed at a port nothing listens on: nothing is sent either way. Goes
+        // through the constructor Spring uses, so the raw USAGE_REPORTING_ENABLED string is read.
+        return new UsageReportingService(enabled, "http://127.0.0.1:9", "test-key", "", noBuildProperties);
     }
 }

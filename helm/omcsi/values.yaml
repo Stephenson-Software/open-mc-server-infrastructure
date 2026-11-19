@@ -145,7 +145,8 @@ minecraftWrapper:
     # version, a random installation ID and USAGE_REPORTING_TAGS — nothing per
     # request or per player, and nothing about the world, the operator, the host
     # or its address. On by
-    # default; "false" turns it off. The key is the project's write-only program
+    # default; "false" turns it off, and so does anything but "true", "on", "yes"
+    # or "1" (blank included): the switch fails closed. The key is the project's write-only program
     # key, not a credential, which is why it lives here rather than in a Secret.
     # Details: https://danielstephenson.dev/usage-reporting
     USAGE_REPORTING_ENABLED: "true"
@@ -155,10 +156,11 @@ minecraftWrapper:
     # CI deployment can be told apart from a real one. "version" is reserved.
     USAGE_REPORTING_TAGS: ""
     # The switch every trace client honours, checked before USAGE_REPORTING_ENABLED:
-    # "off" (or "false", "0", "no") turns reporting off. Empty means not set.
+    # "off" (or "false", "0", "no" -- anything but "true", "on", "yes", "1") turns
+    # reporting off. Empty means not set.
     TRACE_USAGE_REPORTING: ""
-    # The https://consoledonottrack.com convention: "1" (or "true", "yes") turns
-    # reporting off too. Empty means not set.
+    # The https://consoledonottrack.com convention: "1" (or anything but "0",
+    # "false", "off", "no") turns reporting off too. Empty means not set.
     DO_NOT_TRACK: ""
 
 # ---------------------------------------------------------------------------

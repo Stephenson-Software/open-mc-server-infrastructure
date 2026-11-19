@@ -1586,15 +1586,21 @@ To turn it off, any one of these is enough:
   [consoledonottrack.com](https://consoledonottrack.com); on Compose it is passed through from
   `.env`, on Kubernetes it is `minecraftWrapper.env.DO_NOT_TRACK`
 
+Every switch fails closed, so an opt-out is never read as "on": `USAGE_REPORTING_ENABLED`
+keeps reporting on only for `true`, `on`, `yes` or `1` (any case) and turns it off for
+anything else, blank or a typo included; `TRACE_USAGE_REPORTING` set to anything but blank
+or one of those values turns it off; `DO_NOT_TRACK` set to anything but blank, `0`,
+`false`, `off` or `no` turns it off. Nothing in the stack rewrites these settings.
+
 The related variables, for Compose in `.env` and for Kubernetes under `minecraftWrapper.env`
 in `helm/omcsi/values.yaml`:
 
-- `USAGE_REPORTING_ENABLED`: Set to `false` to turn it off (default: `true`)
+- `USAGE_REPORTING_ENABLED`: Set to `false` to turn it off; anything but `true`/`on`/`yes`/`1`, blank included, is off (default when unset: `true`)
 - `USAGE_REPORTING_ENDPOINT`: Where the event goes (default: `https://trace.danielstephenson.dev`)
 - `USAGE_REPORTING_KEY`: The program key. Leave empty to use the project's bundled write-only key (default)
 - `USAGE_REPORTING_TAGS`: Optional comma-separated `k=v` pairs attached to the event, e.g. `ci=true` so a CI deployment can be told apart from a real one. `version` is reserved (default: empty)
-- `TRACE_USAGE_REPORTING`: `off` turns it off regardless of the above (default: unset)
-- `DO_NOT_TRACK`: `1` turns it off regardless of the above (default: unset)
+- `TRACE_USAGE_REPORTING`: `off` (or anything but blank/`true`/`on`/`yes`/`1`) turns it off regardless of the above (default: unset)
+- `DO_NOT_TRACK`: `1` (or anything but blank/`0`/`false`/`off`/`no`) turns it off regardless of the above (default: unset)
 
 ```bash
 helm upgrade omcsi helm/omcsi --namespace omcsi --reuse-values \
