@@ -32,12 +32,16 @@ import java.util.Map;
  *
  * <p>Configured through the {@code usage-reporting.*} properties in
  * {@code application.properties}, each backed by an environment variable:
- * {@code USAGE_REPORTING_ENABLED} (default {@code true}), {@code USAGE_REPORTING_ENDPOINT},
+ * {@code USAGE_REPORTING_ENABLED} (default {@code true} when unset), {@code USAGE_REPORTING_ENDPOINT},
  * {@code USAGE_REPORTING_KEY} and {@code USAGE_REPORTING_TAGS} (comma-separated {@code k=v}
- * pairs attached to the event, e.g. {@code ci=true}). Reporting is on by default;
- * {@code USAGE_REPORTING_ENABLED=false} turns it off, and so do the environment variables
- * every trace client honours, {@code TRACE_USAGE_REPORTING=off} and {@code DO_NOT_TRACK=1},
- * which the client checks before anything this service passes it. Because other people
+ * pairs attached to the event, e.g. {@code ci=true}). Reporting is on by default, and
+ * every switch fails closed: {@code USAGE_REPORTING_ENABLED} set to anything but {@code true},
+ * {@code on}, {@code yes} or {@code 1} -- {@code false}, {@code off}, blank, a typo -- turns it
+ * off (read through {@link TraceClient#allowsReporting(Object)}, not Spring's boolean
+ * conversion, which refuses to start on a typo), and so do the environment variables every
+ * trace client honours, {@code TRACE_USAGE_REPORTING} set to anything but blank or an "on"
+ * value and {@code DO_NOT_TRACK} set to anything but blank or {@code 0}/{@code false}/
+ * {@code off}/{@code no}, which the client checks before anything this service passes it. Because other people
  * deploy this stack, one INFO line is logged on every start saying that reporting is on and
  * how to turn it off, or that it is off and why. Details:
  * https://danielstephenson.dev/usage-reporting
@@ -64,12 +68,12 @@ public class UsageReportingService {
 
     @Autowired
     public UsageReportingService(
-            @Value("${usage-reporting.enabled:true}") boolean enabled,
+            @Value("${usage-reporting.enabled:true}") String enabled,
             @Value("${usage-reporting.endpoint:https://trace.danielstephenson.dev}") String endpoint,
             @Value("${usage-reporting.key:}") String key,
             @Value("${usage-reporting.tags:}") String tags,
             ObjectProvider<BuildProperties> buildProperties) {
-        this(enabled, endpoint, key, tags, versionOf(buildProperties.getIfAvailable()));
+        this(TraceClient.allowsReporting(enabled), endpoint, key, tags, versionOf(buildProperties.getIfAvailable()));
     }
 
     UsageReportingService(boolean enabled, String endpoint, String key, String tags, String version) {
@@ -108,7 +112,7 @@ public class UsageReportingService {
             return REASON_NO_ENDPOINT;
         }
         if (TraceClient.REASON_CONFIG.equals(reason)) {
-            return "USAGE_REPORTING_ENABLED=false";
+            return "USAGE_REPORTING_ENABLED is not true";
         }
         return reason;
     }

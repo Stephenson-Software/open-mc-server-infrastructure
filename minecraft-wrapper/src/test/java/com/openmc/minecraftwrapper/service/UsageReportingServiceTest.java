@@ -144,7 +144,7 @@ class UsageReportingServiceTest {
     void disabledSendsNothing() throws Exception {
         UsageReportingService service = new UsageReportingService(false, endpoint, "test-key", "", "1.0");
         assertFalse(service.isEnabled());
-        assertEquals("USAGE_REPORTING_ENABLED=false", service.disabledReason());
+        assertEquals("USAGE_REPORTING_ENABLED is not true", service.disabledReason());
 
         service.reportStartup();
 
