@@ -1,6 +1,8 @@
 package com.openmc.webapp.controller;
 
 import com.openmc.webapp.config.ServerConfig;
+import com.openmc.webapp.dto.WorldInfo;
+import com.openmc.webapp.model.DeploymentRecord;
 import com.openmc.webapp.service.ActivityTrackerService;
 import com.openmc.webapp.service.AlertNotificationService;
 import com.openmc.webapp.service.MinecraftWrapperService.WrapperResult;
@@ -18,8 +20,10 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -28,8 +32,10 @@ import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.times;
@@ -39,8 +45,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.hamcrest.Matchers.containsString;
 
 @WebMvcTest(ServerController.class)
-// The world upload endpoint short-circuits when deploy.auth.token is unset, so give it a value.
-@TestPropertySource(properties = "deploy.auth.token=test-deploy-token")
+// The world upload endpoint short-circuits when deploy.auth.token is unset, and the deployment
+// history endpoint rejects everything when deployment.auth.token is unset, so give both a value.
+@TestPropertySource(properties = {
+        "deploy.auth.token=test-deploy-token",
+        "deployment.auth.token=test-deployment-token"
+})
 @DisplayName("ServerController Tests")
 class ServerControllerTest {
 
@@ -73,6 +83,11 @@ class ServerControllerTest {
 
     @MockBean
     private ServerStateService serverStateService;
+
+    @Autowired
+    private ServerController serverController;
+
+    private static final String VALID_DEPLOYMENT_BODY = "{\"pluginName\":\"MedievalFactions\",\"status\":\"SUCCESS\"}";
 
     private RconService.ServerStatus mockStatus;
 
@@ -615,5 +630,276 @@ class ServerControllerTest {
                 .andExpect(jsonPath("$.success").value(true));
 
         verify(minecraftWrapperService).uploadWorld(any(), eq("test-deploy-token"));
+    }
+
+    @Test
+    @DisplayName("Should list worlds with valid credentials")
+    void shouldListWorldsWithValidCredentials() throws Exception {
+        when(worldService.listWorlds()).thenReturn(List.of(
+                new WorldInfo("world", "2026-11-01T00:00:00Z", true),
+                new WorldInfo("old-world", "2026-10-01T00:00:00Z", false)));
+
+        mockMvc.perform(post("/api/world/list")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"admin\",\"password\":\"admin\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.worlds[0].name").value("world"))
+                .andExpect(jsonPath("$.worlds[0].active").value(true))
+                .andExpect(jsonPath("$.worlds[1].name").value("old-world"));
+    }
+
+    @Test
+    @DisplayName("Should reject world list with invalid credentials without reading the worlds")
+    void shouldRejectListWorldsWithInvalidCredentials() throws Exception {
+        mockMvc.perform(post("/api/world/list")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"admin\",\"password\":\"wrong\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error").value("Invalid username or password"));
+
+        verify(worldService, never()).listWorlds();
+        verify(alertNotificationService, times(1)).sendWarningAlert(eq("World List Authentication Failed"), anyString());
+    }
+
+    @Test
+    @DisplayName("Should delete a world with valid credentials and send an info alert")
+    void shouldDeleteWorldWithValidCredentials() throws Exception {
+        when(worldService.deleteWorld("old-world")).thenReturn("World deleted successfully: old-world");
+
+        mockMvc.perform(post("/api/world/delete")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"admin\",\"password\":\"admin\",\"name\":\"old-world\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("World deleted successfully: old-world"));
+
+        verify(alertNotificationService, times(1)).sendInfoAlert(
+                eq("World Deleted Successfully"), eq("User 'admin' deleted world: old-world"));
+    }
+
+    // WorldService reports failures as strings starting with "Error"; the controller maps
+    // those to success=false and must not announce a deletion that did not happen.
+    @Test
+    @DisplayName("Should surface a world service error result without sending a success alert")
+    void shouldSurfaceWorldDeleteErrorResult() throws Exception {
+        when(worldService.deleteWorld("world"))
+                .thenReturn("Error: Cannot delete the active world");
+
+        mockMvc.perform(post("/api/world/delete")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"admin\",\"password\":\"admin\",\"name\":\"world\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error").value("Error: Cannot delete the active world"));
+
+        verify(alertNotificationService, never()).sendInfoAlert(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Should reject world delete with a missing name before checking credentials")
+    void shouldRejectWorldDeleteWithMissingName() throws Exception {
+        mockMvc.perform(post("/api/world/delete")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"admin\",\"password\":\"admin\",\"name\":\"\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error").value("Missing required parameters"));
+
+        verify(worldService, never()).deleteWorld(anyString());
+        verify(alertNotificationService, never()).sendWarningAlert(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("Should reject world delete with invalid credentials without deleting")
+    void shouldRejectWorldDeleteWithInvalidCredentials() throws Exception {
+        mockMvc.perform(post("/api/world/delete")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"admin\",\"password\":\"wrong\",\"name\":\"world\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error").value("Invalid username or password"));
+
+        verify(worldService, never()).deleteWorld(anyString());
+        verify(alertNotificationService, times(1)).sendWarningAlert(eq("World Delete Authentication Failed"), anyString());
+    }
+
+    @Test
+    @DisplayName("Should return the current history max size")
+    void shouldReturnHistoryMaxSize() throws Exception {
+        when(rconService.getMaxHistorySize()).thenReturn(25);
+
+        mockMvc.perform(get("/api/history/max-size"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.maxSize").value(25));
+    }
+
+    @Test
+    @DisplayName("Should apply a positive history max size")
+    void shouldSetHistoryMaxSize() throws Exception {
+        mockMvc.perform(post("/api/history/max-size")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"maxSize\":40}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.maxSize").value(40));
+
+        verify(rconService).setMaxHistorySize(40);
+    }
+
+    @Test
+    @DisplayName("Should reject a missing history max size")
+    void shouldRejectMissingHistoryMaxSize() throws Exception {
+        mockMvc.perform(post("/api/history/max-size")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error").value("maxSize is required"));
+
+        verify(rconService, never()).setMaxHistorySize(anyInt());
+    }
+
+    @Test
+    @DisplayName("Should reject a non-positive history max size without touching the service")
+    void shouldRejectNonPositiveHistoryMaxSize() throws Exception {
+        mockMvc.perform(post("/api/history/max-size")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"maxSize\":0}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error").value("maxSize must be greater than 0"));
+
+        verify(rconService, never()).setMaxHistorySize(anyInt());
+    }
+
+    // The controller's own > 0 check normally pre-empts the service's, so this pins the
+    // fallback: any IllegalArgumentException the service throws is returned as the error.
+    @Test
+    @DisplayName("Should surface the service's rejection of a history max size")
+    void shouldSurfaceHistoryMaxSizeRejection() throws Exception {
+        doThrow(new IllegalArgumentException("Max history size must be greater than 0"))
+                .when(rconService).setMaxHistorySize(5000);
+
+        mockMvc.perform(post("/api/history/max-size")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"maxSize\":5000}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error").value("Max history size must be greater than 0"));
+    }
+
+    @Test
+    @DisplayName("Should return the recorded deployment history")
+    void shouldReturnDeploymentHistory() throws Exception {
+        when(deploymentHistoryService.getDeploymentHistory()).thenReturn(List.of(
+                new DeploymentRecord(Instant.parse("2026-11-01T12:00:00Z"), "MedievalFactions", "SUCCESS",
+                        "github-actions", "main", "https://example.com/repo", "deployed")));
+
+        mockMvc.perform(get("/api/deployment-history"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.deployments[0].pluginName").value("MedievalFactions"))
+                .andExpect(jsonPath("$.deployments[0].status").value("SUCCESS"))
+                .andExpect(jsonPath("$.deployments[0].branch").value("main"));
+    }
+
+    // An unset deployment.auth.token must fail closed: even a Bearer header whose (empty)
+    // token matches the empty configured value is refused. The field is blanked on the shared
+    // controller bean for this test only and restored afterwards.
+    @Test
+    @DisplayName("Should reject every deployment record when no deployment token is configured")
+    void shouldRejectDeploymentRecordWhenTokenUnset() throws Exception {
+        ReflectionTestUtils.setField(serverController, "deploymentAuthToken", "");
+        try {
+            mockMvc.perform(post("/api/deployment-history")
+                            .header("Authorization", "Bearer ")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(VALID_DEPLOYMENT_BODY))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.success").value(false))
+                    .andExpect(jsonPath("$.message").value("Unauthorized"));
+        } finally {
+            ReflectionTestUtils.setField(serverController, "deploymentAuthToken", "test-deployment-token");
+        }
+
+        verify(deploymentHistoryService, never()).recordDeployment(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Should reject a deployment record with no Authorization header")
+    void shouldRejectDeploymentRecordWithoutAuthorizationHeader() throws Exception {
+        mockMvc.perform(post("/api/deployment-history")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_DEPLOYMENT_BODY))
+                .andExpect(status().isUnauthorized());
+
+        verify(deploymentHistoryService, never()).recordDeployment(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Should reject a deployment record with a wrong bearer token")
+    void shouldRejectDeploymentRecordWithWrongToken() throws Exception {
+        mockMvc.perform(post("/api/deployment-history")
+                        .header("Authorization", "Bearer not-the-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_DEPLOYMENT_BODY))
+                .andExpect(status().isUnauthorized());
+
+        verify(deploymentHistoryService, never()).recordDeployment(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Should reject a deployment record whose correct token lacks the Bearer scheme")
+    void shouldRejectDeploymentTokenWithoutBearerScheme() throws Exception {
+        mockMvc.perform(post("/api/deployment-history")
+                        .header("Authorization", "test-deployment-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_DEPLOYMENT_BODY))
+                .andExpect(status().isUnauthorized());
+
+        verify(deploymentHistoryService, never()).recordDeployment(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Should reject a deployment record with no pluginName")
+    void shouldRejectDeploymentRecordWithoutPluginName() throws Exception {
+        mockMvc.perform(post("/api/deployment-history")
+                        .header("Authorization", "Bearer test-deployment-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"SUCCESS\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("pluginName and status are required"));
+
+        verify(deploymentHistoryService, never()).recordDeployment(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Should reject a deployment status other than SUCCESS or FAILURE")
+    void shouldRejectUnknownDeploymentStatus() throws Exception {
+        mockMvc.perform(post("/api/deployment-history")
+                        .header("Authorization", "Bearer test-deployment-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"pluginName\":\"MedievalFactions\",\"status\":\"PENDING\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("Invalid status")));
+
+        verify(deploymentHistoryService, never()).recordDeployment(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("Should record an authorized deployment with its status upper-cased")
+    void shouldRecordAuthorizedDeployment() throws Exception {
+        mockMvc.perform(post("/api/deployment-history")
+                        .header("Authorization", "Bearer test-deployment-token")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"pluginName\":\"MedievalFactions\",\"status\":\"failure\","
+                                + "\"source\":\"github-actions\",\"branch\":\"main\","
+                                + "\"repoUrl\":\"https://example.com/repo\",\"message\":\"build broke\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(deploymentHistoryService).recordDeployment("MedievalFactions", "FAILURE",
+                "github-actions", "main", "https://example.com/repo", "build broke");
     }
 }
