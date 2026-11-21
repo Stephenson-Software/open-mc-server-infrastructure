@@ -8,13 +8,18 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
+import com.openmc.minecraftwrapper.server.adapters.LatestLogFile;
+import com.openmc.minecraftwrapper.server.adapters.ProcfsMemoryProbe;
+import com.openmc.minecraftwrapper.server.core.ServerCommandLine;
+import com.openmc.minecraftwrapper.server.core.ServerTelemetry;
+import com.openmc.minecraftwrapper.server.model.ServerSettings;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -33,12 +38,18 @@ class MinecraftServerServiceTest {
     private ShutdownService shutdownService;
 
     private MinecraftServerService service;
+    private ServerTelemetry telemetry;
     private Path logFile;
+
+    private static ServerSettings settings(String dir, String javaBin, String javaOpts, String jar) {
+        return new ServerSettings(jar, dir, javaOpts, javaBin, false, false);
+    }
 
     @BeforeEach
     void setUp() {
-        service = new MinecraftServerService(alertService, shutdownService);
-        ReflectionTestUtils.setField(service, "serverDirectory", tempDir.toString());
+        service = new MinecraftServerService(settings(tempDir.toString(), "java", "-Xmx2G -Xms1G", "server.jar"),
+                alertService, shutdownService);
+        telemetry = new ServerTelemetry(new LatestLogFile(tempDir.toString()), new ProcfsMemoryProbe(), Clock.systemUTC());
         logFile = tempDir.resolve("logs").resolve("latest.log");
     }
 
@@ -58,9 +69,9 @@ class MinecraftServerServiceTest {
         }
     }
 
-    /** Invoke the private TPS parser directly — the public path requires a live server process. */
+    /** Call the TPS parser directly — the public metrics path requires a live server process. */
     private String parseTps() {
-        return ReflectionTestUtils.invokeMethod(service, "parseTpsFromLogs");
+        return telemetry.latestTps();
     }
 
     @Nested
@@ -184,12 +195,10 @@ class MinecraftServerServiceTest {
 
     @Test
     void serverCommandUsesTheConfiguredJavaAndSplitsTheOptions() {
-        ReflectionTestUtils.setField(service, "javaBin", "/usr/lib/jvm/java-17-openjdk-amd64/bin/java");
-        ReflectionTestUtils.setField(service, "javaOpts", " -Xmx2G  -Xms1G ");
-        ReflectionTestUtils.setField(service, "serverJar", "spigot-1.19.4.jar");
+        ServerSettings s = settings(tempDir.toString(), "/usr/lib/jvm/java-17-openjdk-amd64/bin/java", " -Xmx2G  -Xms1G ", "spigot-1.19.4.jar");
 
         assertEquals(
                 List.of("/usr/lib/jvm/java-17-openjdk-amd64/bin/java", "-Xmx2G", "-Xms1G", "-jar", "spigot-1.19.4.jar", "nogui"),
-                service.buildServerCommand());
+                ServerCommandLine.build(s));
     }
 }

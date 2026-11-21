@@ -151,6 +151,29 @@ usage-reporting.tags=
 - `TRACE_USAGE_REPORTING`: The switch every trace client honours, checked before `USAGE_REPORTING_ENABLED`; `off` (or `false`, `0`, `no`) turns reporting off (default: unset)
 - `DO_NOT_TRACK`: `1` (or `true`, `yes`) turns reporting off too, per https://consoledonottrack.com (default: unset)
 
+## Code Layout: Server Lifecycle
+
+Launching and watching the Minecraft server lives in `com.openmc.minecraftwrapper.server`, split into a pure core and swappable I/O:
+
+```
+callers (ServerController, WorldUploadService)
+  -> service/MinecraftServerService     composition root: binds config, wires production adapters
+  -> server/core                         ServerLifecycle, ServerTelemetry, ServerCommandLine (policy only)
+  -> server/ports  <-  server/adapters   one interface / one implementation per file
+```
+
+| Port | Production adapter |
+|---|---|
+| `ServerLauncher` / `RunningServer` | `FifoServerLauncher` / `FifoRunningServer` (process + `server_input` named pipe) |
+| `Sleeper` | `ThreadSleeper` |
+| `ServerLog` | `LatestLogFile` (`logs/latest.log`) |
+| `ProcessMemoryProbe` | `ProcfsMemoryProbe` (`/proc/<pid>/status`) |
+| `ServerAlerts` | `AlertManagerServerAlerts` (via `AlertService`) |
+| `GracefulShutdown` | `BroadcastGracefulShutdown` (via `ShutdownService`) |
+| `java.time.Clock` | `Clock.systemUTC()` |
+
+The core is tested on fakes (`src/test/.../server/fakes`), the adapters against the same contracts, and the real process path end to end by `MinecraftServerServiceLifecycleTest`. `ServerArchitectureTest` fails the build if `model`/`core`/`ports` import an adapter. To add a new way of running the server, add one launcher adapter (plus its running-server class) and select it in `MinecraftServerService`.
+
 ## Building
 
 ```bash
