@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.function.BooleanSupplier;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -193,6 +194,28 @@ class ServerLifecycleTest {
         assertEquals(List.of(Duration.ofSeconds(2)), sleeper.sleeps);
         assertEquals(2, launcher.launched.size());
         assertEquals(1001L, lifecycle.getStatus().getPid());
+    }
+
+    @Test
+    @DisplayName("a late exit monitor from the replaced server leaves the new server alone")
+    void staleMonitorLeavesNewServerAlone() throws Exception {
+        lifecycle = build(false, true);
+        lifecycle.start();
+        FakeRunningServer first = launcher.last();
+        CountDownLatch gate = new CountDownLatch(1);
+        first.monitorGate = gate; // first's monitor wakes only after the restart is done
+
+        lifecycle.restart();
+        FakeRunningServer second = launcher.last();
+        gate.countDown();
+
+        await(() -> first.releases == 2); // restart's cleanup, then its own monitor
+        Thread.sleep(50);
+        assertEquals(0, second.releases, "the new server's console must survive");
+        assertTrue(lifecycle.getStatus().isRunning());
+        assertEquals(List.of("started", "started"), alerts.sent, "no stop alert for a restart");
+        assertEquals(List.of(Duration.ofSeconds(2)), sleeper.sleeps, "no auto-restart attempt");
+        assertEquals(2, launcher.launched.size());
     }
 
     @Test

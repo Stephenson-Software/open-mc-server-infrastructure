@@ -38,9 +38,8 @@ public class ServerLifecycle {
     private final Clock clock;
 
     /**
-     * The most recently prepared server. Deliberately the "current" one rather than per-launch:
-     * the exit monitor releases whatever is current when it wakes, exactly as the pre-refactor
-     * fields did (see the flagged restart race in the refactor report).
+     * The most recently prepared server. Each exit monitor watches the server it was started for,
+     * so a late monitor for a replaced server never touches this one.
      */
     private volatile RunningServer server;
     private final AtomicBoolean shutdownInProgress = new AtomicBoolean(false);
@@ -205,13 +204,21 @@ public class ServerLifecycle {
     }
 
     private void monitorServerProcess() {
+        RunningServer watched = server;
         Thread monitorThread = new Thread(() -> {
             try {
-                int exitCode = server.awaitExit();
+                int exitCode = watched.awaitExit();
                 log.info("Minecraft server process exited with code: {}", exitCode);
 
-                // Cleanup resources after process ends
-                cleanupResources();
+                // Release the console of the process that exited, never a newer one
+                watched.release();
+
+                // A restart already replaced this process: alerts and auto-restart belong to
+                // the new one, so a late monitor for the old one must do nothing more.
+                if (watched != server) {
+                    log.debug("Exited process was already replaced; nothing more to do");
+                    return;
+                }
 
                 // Only send alerts if not in shutdown process
                 if (!shutdownInProgress.get()) {

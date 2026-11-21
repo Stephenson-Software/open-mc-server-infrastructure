@@ -29,6 +29,8 @@ public final class FakeRunningServer implements RunningServer {
     public volatile IOException sendFailure;
     public volatile IOException startFailure;
     public volatile int releases;
+    /** When set, {@link #awaitExit()} holds the exit monitor here after the exit, until released. */
+    public volatile java.util.concurrent.CountDownLatch monitorGate;
     public volatile boolean destroyed;
     public volatile boolean destroyedForcibly;
     private final CompletableFuture<Integer> exit = new CompletableFuture<>();
@@ -81,7 +83,12 @@ public final class FakeRunningServer implements RunningServer {
     @Override
     public int awaitExit() throws InterruptedException {
         try {
-            return exit.get();
+            int code = exit.get();
+            java.util.concurrent.CountDownLatch gate = monitorGate;
+            if (gate != null) {
+                gate.await();
+            }
+            return code;
         } catch (ExecutionException e) {
             throw new IllegalStateException(e);
         }
@@ -115,7 +122,7 @@ public final class FakeRunningServer implements RunningServer {
     }
 
     @Override
-    public void release() {
+    public synchronized void release() {
         releases++;
     }
 }
